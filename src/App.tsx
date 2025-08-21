@@ -1,5 +1,4 @@
 // src/App.tsx
-
 import React, { useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import './App.css'; // Глобальные стили приложения (если нужны)
@@ -18,11 +17,11 @@ import PrivacyPage from './pages/PrivacyPage';
 import NotFoundPage from './pages/NotFoundPage'; // Страница 404
 
 // === Импорт контекста аутентификации ===
-// import { useAuth } from './hooks/useAuth'; // Будет создан позже
-// import { AuthProvider } from './context/AuthContext'; // Будет создан позже
+import { AuthProvider } from './context/AuthContext'; // Импортируем провайдер
+import { useAuth } from './hooks/useAuth'; // Импортируем хук
 
 // === Импорт утилит и хуков ===
-import { useLocalStorage } from './hooks/useLocalStorage'; // Будет создан позже
+import { useLocalStorage } from './hooks/useLocalStorage';
 
 const App: React.FC = () => {
   // === Получение текущего местоположения для SEO ===
@@ -42,77 +41,87 @@ const App: React.FC = () => {
   // }, [location]);
 
   return (
-    <div className="flex flex-col min-h-screen bg-white text-slate-900"> {/* Основной контейнер приложения */}
-      
-      {/* Баннер о локальном хранилище (пункт 6 ТЗ, пункт 8 обсуждения) */}
-      {/* Показываем баннер, если он еще не был закрыт пользователем */}
-      {!bannerClosed && (
-        <div className="bg-blue-100 border-b border-blue-200 px-4 py-3 text-blue-800 flex justify-between items-center">
-          <span>
-            Мы используем локальное хранилище для сохранения настроек и истории чата. Продолжая, вы соглашаетесь с <a href="/privacy" className="underline hover:text-blue-600">Политикой конфиденциальности</a>.
-          </span>
-          <button
-            onClick={handleCloseBanner}
-            className="ml-4 px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-300"
-            aria-label="Закрыть уведомление"
-          >
-            Закрыть
-          </button>
-        </div>
-      )}
+    <AuthProvider> {/* Оборачиваем всё приложение в AuthProvider */}
+      <div className="flex flex-col min-h-screen bg-white text-slate-900"> {/* Основной контейнер приложения */}
+        
+        {/* Баннер о локальном хранилище (пункт 6 ТЗ, пункт 8 обсуждения) */}
+        {/* Показываем баннер, если он еще не был закрыт пользователем */}
+        {!bannerClosed && (
+          <div className="bg-blue-100 border-b border-blue-200 px-4 py-3 text-blue-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+            <span>
+              Мы используем локальное хранилище для сохранения настроек и истории чата. Продолжая, вы соглашаетесь с <a href="/privacy" className="underline hover:text-blue-600">Политикой конфиденциальности</a>.
+            </span>
+            <button
+              onClick={handleCloseBanner}
+              className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-300 whitespace-nowrap"
+              aria-label="Закрыть уведомление"
+            >
+              Закрыть
+            </button>
+          </div>
+        )}
 
-      {/* Шапка сайта */}
-      <Header />
+        {/* Шапка сайта */}
+        <Header />
 
-      {/* Основное содержимое */}
-      <main className="flex-grow container mx-auto px-4 py-6">
-        {/* Роутинг приложения */}
-        <Routes>
-          {/* Главная страница */}
-          <Route path="/" element={<HomePage />} />
+        {/* Основное содержимое */}
+        <main className="flex-grow container mx-auto px-4 py-6">
+          {/* Роутинг приложения */}
+          <Routes>
+            {/* Главная страница */}
+            <Route path="/" element={<HomePage />} />
 
-          {/* Профиль (требует аутентификации) */}
-          {/* <Route path="/profile" element={<PrivateRoute><ProfilePage /></PrivateRoute>} /> */}
-          {/* Для MVP временно делаем доступным для всех, чтобы можно было проверить */}
-          <Route path="/profile" element={<ProfilePage />} />
+            {/* Профиль (требует аутентификации) */}
+            <Route path="/profile" element={<PrivateRoute><ProfilePage /></PrivateRoute>} />
 
-          {/* Каталог документов */}
-          <Route path="/documents" element={<DocumentsPage />} />
+            {/* Каталог документов */}
+            <Route path="/documents" element={<DocumentsPage />} />
 
-          {/* ИИ-консультант */}
-          <Route path="/ask-ai" element={<AskAIPage />} />
+            {/* ИИ-консультант */}
+            <Route path="/ask-ai" element={<AskAIPage />} />
 
-          {/* Помощь и обратная связь */}
-          <Route path="/help" element={<HelpPage />} />
+            {/* Помощь и обратная связь */}
+            <Route path="/help" element={<HelpPage />} />
 
-          {/* Политика конфиденциальности */}
-          <Route path="/privacy" element={<PrivacyPage />} />
+            {/* Политика конфиденциальности */}
+            <Route path="/privacy" element={<PrivacyPage />} />
 
-          {/* Редирект со старого URL /help на новый /help, если нужно */}
-          {/* <Route path="/help-old" element={<Navigate to="/help" replace />} /> */}
+            {/* Редирект со старого URL /help на новый /help, если нужно */}
+            {/* <Route path="/help-old" element={<Navigate to="/help" replace />} /> */}
 
-          {/* Страница 404 - должна быть последней */}
-          <Route path="*" element={<NotFoundPage />} />
-        </Routes>
-      </main>
+            {/* Страница 404 - должна быть последней */}
+            <Route path="*" element={<NotFoundPage />} />
+          </Routes>
+        </main>
 
-      {/* Подвал сайта */}
-      {/* <Footer /> */}
+        {/* Подвал сайта */}
+        {/* <Footer /> */}
 
-      {/* Уведомления (Toasts) - будут реализованы позже */}
-      {/* <ToastContainer /> */}
+        {/* Уведомления (Toasts) - будут реализованы позже */}
+        {/* <ToastContainer /> */}
 
-    </div>
+      </div>
+    </AuthProvider>
   );
 };
 
+// === Вспомогательный компонент PrivateRoute ===
+const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, loading } = useAuth(); // Получаем состояние аутентификации
+  const location = useLocation();
+
+  // Пока состояние аутентификации загружается, можно показать спиннер или просто ничего
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"></div>
+      </div>
+    );
+  }
+
+  // Если пользователь аутентифицирован (не гость), показываем children, иначе перенаправляем на главную (или на логин, если будет отдельная страница)
+  // Для MVP редирект на главную
+  return user && user.role !== 'guest' ? <>{children}</> : <Navigate to="/" replace state={{ from: location }} />;
+};
+
 export default App;
-
-// === Вспомогательный компонент PrivateRoute (будет доработан) ===
-// const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-//   // const { isAuthenticated } = useAuth(); // Получаем состояние аутентификации
-//   const isAuthenticated = false; // Заглушка
-
-//   // Если пользователь аутентифицирован, показываем children, иначе перенаправляем на логин
-//   return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace state={{ from: location }} />;
-// };
