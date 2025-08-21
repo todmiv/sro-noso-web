@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- Уникальные title и description для каждой страницы будут установлены через React Helmet Async или аналог в компонентах страниц -->
+    <title>СРО НОСО - Платформа для членов</title>
+    <meta name="description" content="Официальная онлайн-платформа для членов Саморегулируемой организации НОСО. Авторизация по ИНН, каталог документов, ИИ-консультант." />
+
+    <!-- Viewport для адаптивности -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- Подключение шрифта Inter через Google Fonts (соответствует пункту 10 ТЗ) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Иконка favicon (предполагается, что файл будет добавлен в public/) -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
+    <!-- Альтернативная иконка, созданная Vite по умолчанию -->
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+
+    <!-- SEO: ссылки на robots.txt и sitemap.xml (будут генерироваться скриптом при сборке, см. пункт 8 ТЗ) -->
+    <link rel="sitemap" type="application/xml" href="/sitemap.xml">
+    <link rel="robots" href="/robots.txt">
+
+    <!-- Plausible Analytics (соответствует пункту 4 ТЗ). Домен нужно будет заменить на реальный при деплое -->
+    <!-- Дата-домен также должен соответствовать настройкам в Plausible -->
+    <script defer data-domain="sro-noso.ru" src="https://plausible.io/js/script.js"></script>
+
+  </head>
+  <body>
+    <!-- Корневой элемент для монтирования React-приложения -->
+    <div id="root"></div>
+    <!-- Точка входа для React-приложения, обрабатывается Vite -->
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
