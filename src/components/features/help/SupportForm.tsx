@@ -1,268 +1,337 @@
 // src/components/features/help/SupportForm.tsx
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { useAuth } from '../../../context/AuthContext';
+import { submitSupportTicket } from '../../../services/supportService';
+import { SupportFormSubmission, SupportTopic } from '../../../types/support';
+import { LIMITS } from '../../../utils/constants';
+import Button from '../../ui/Button';
+import Input from '../../ui/Input';
+import Toast from '../../ui/Toast';
 
-import React, { useState } from 'react';
-// import Button from '../../ui/Button'; // Можно использовать, если нужно
-// import Input from '../../ui/Input'; // Можно использовать, если нужно
-// import { isValidEmail } from '../../../utils/helpers'; // Будет создан позже
+/**
+ * Компонент формы обратной связи.
+ *
+ * Реализует сценарий 2.6 из ТЗ: отправка тикетов поддержки.
+ * Включает поля темы, сообщения, скриншота и email.
+ * Использует supportService для отправки данных.
+ */
 
-interface SupportFormProps {
-  // Предзаполненный email, если пользователь авторизован
-  initialEmail?: string;
-  // Callback, вызываемый при успешной отправке
-  onSubmitSuccess?: () => void;
-}
+const SupportForm: React.FC = () => {
+  const { user } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-const SupportForm: React.FC<SupportFormProps> = ({ initialEmail = '', onSubmitSuccess }) => {
-  // === Состояния формы ===
-  const [topic, setTopic] = useState<string>(''); // Выбранный пункт из выпадающего списка
+  // Состояние формы
+  const [email, setEmail] = useState<string>(user?.recovery_email || '');
+  const [topic, setTopic] = useState<SupportTopic>(SupportTopic.TechnicalIssue);
   const [message, setMessage] = useState<string>('');
   const [screenshot, setScreenshot] = useState<File | null>(null);
-  const [email, setEmail] = useState<string>(initialEmail);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [submitSuccess, setSubmitSuccess] = useState<boolean>(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [isConsentChecked, setIsConsentChecked] = useState<boolean>(false); // Согласие на обработку ПД
+  const [submitSuccess, setSubmitSuccess] = useState<boolean>(false);
+  const [showToast, setShowToast] = useState<boolean>(false);
+  const [toastMessage, setToastMessage] = useState<string>('');
+  const [toastType, setToastType] = useState<'success' | 'error'>('success');
 
-  // === Обработчики ===
-  const handleTopicChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setTopic(e.target.value);
-  };
+  // Функция для показа Toast
+  const showToastMessage = useCallback((message: string, type: 'success' | 'error' = 'success') => {
+    setToastMessage(message);
+    setToastType(type);
+    setShowToast(true);
+  }, []);
 
-  const handleMessageChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setMessage(e.target.value);
-  };
-
+  // Обработчик изменения скриншота
   const handleScreenshotChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Проверка размера файла (до 5 МБ)
-      if (file.size > 5 * 1024 * 1024) {
-        setSubmitError('Размер скриншота не должен превышать 5 МБ.');
-        e.target.value = ''; // Сбросить выбор файла
+      // Проверка размера файла
+      if (file.size > LIMITS.SUPPORT.MAX_SCREENSHOT_SIZE_BYTES) {
+        showToastMessage(`Размер файла превышает ${LIMITS.SUPPORT.MAX_SCREENSHOT_SIZE_BYTES / (1024 * 1024)} МБ.`, 'error');
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ''; // Сбросить input
+        }
         return;
       }
-      // Проверка типа файла (изображения)
-      if (!file.type.startsWith('image/')) {
-        setSubmitError('Пожалуйста, выберите файл изображения (JPG, PNG и т.д.).');
-        e.target.value = ''; // Сбросить выбор файла
+
+      // Проверка типа файла
+      if (!LIMITS.SUPPORT.ALLOWED_SCREENSHOT_MIME_TYPES.includes(file.type)) {
+        showToastMessage('Недопустимый формат файла. Разрешены: JPG, PNG, WEBP, GIF.', 'error');
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ''; // Сбросить input
+        }
         return;
       }
+
       setScreenshot(file);
-      setSubmitError(null); // Очистить ошибку, если файл валиден
+    } else {
+      setScreenshot(null);
     }
   };
 
-  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setEmail(e.target.value);
+  // Обработчик удаления скриншота
+  const handleRemoveScreenshot = () => {
+    setScreenshot(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''; // Сбросить input
+    }
   };
 
-  const handleConsentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setIsConsentChecked(e.target.checked);
-  };
-
+  // Обработчик отправки формы
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitError(null);
+    setSubmitSuccess(false);
 
-    // Базовая валидация
     if (!topic) {
       setSubmitError('Пожалуйста, выберите тему обращения.');
       return;
     }
+
     if (!message.trim()) {
-      setSubmitError('Пожалуйста, опишите проблему.');
+      setSubmitError('Пожалуйста, введите текст сообщения.');
       return;
     }
-    if (!isConsentChecked) {
-      setSubmitError('Необходимо согласие на обработку персональных данных.');
-      return;
-    }
-    // Валидация email, если он введен
-    // if (email && !isValidEmail(email)) {
-    //   setSubmitError('Пожалуйста, введите корректный email.');
-    //   return;
-    // }
 
     setIsSubmitting(true);
     try {
-      // const formData = new FormData();
-      // formData.append('topic', topic);
-      // formData.append('message', message);
-      // if (screenshot) formData.append('screenshot', screenshot);
-      // if (email) formData.append('email', email); // Отправляем email, если указан
+      const submissionData: SupportFormSubmission = {
+        email: email || undefined,
+        topic,
+        message,
+        screenshot: screenshot || undefined,
+        // recaptchaToken: recaptchaToken || undefined, // TODO: Добавить reCAPTCHA v3
+      };
 
-      // await submitSupportTicket(formData); // Вызов сервиса отправки тикета (будет создан позже)
-      
-      // Имитация отправки
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      console.log("Тикет отправлен:", { topic, message, email, screenshot: screenshot?.name });
+      const response = await submitSupportTicket(submissionData);
 
-      // Сброс формы и показ успеха
-      setTopic('');
-      setMessage('');
-      setScreenshot(null);
-      // setEmail(''); // Не сбрасываем email, если он предзаполнен
-      setIsConsentChecked(false);
-      setSubmitSuccess(true);
-      
-      // Вызов callback при успехе
-      if (onSubmitSuccess) {
-        onSubmitSuccess();
+      if (response.success) {
+        setSubmitSuccess(true);
+        showToastMessage('Спасибо! Ваше обращение отправлено. Мы ответим в течение 1 рабочего дня.', 'success');
+        // Сброс формы
+        setMessage('');
+        setScreenshot(null);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ''; // Сбросить input файла
+        }
+        // Email и тема остаются для удобства пользователя
+      } else {
+        throw new Error(response.message || 'Не удалось отправить обращение.');
       }
-
-      // Автоматически скрыть сообщение успеха через 5 секунд
-      setTimeout(() => setSubmitSuccess(false), 5000);
-
-    } catch (err) {
-      console.error("Ошибка при отправке тикета:", err);
-      setSubmitError('Не удалось отправить сообщение. Попробуйте позже.');
+    } catch (err: any) {
+      console.error('Error submitting support ticket:', err);
+      const errorMessage = err.message || 'Произошла ошибка при отправке обращения. Пожалуйста, попробуйте позже.';
+      setSubmitError(errorMessage);
+      showToastMessage(errorMessage, 'error');
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  // Автозаполнение email при изменении пользователя
+  useEffect(() => {
+    if (user?.recovery_email) {
+      setEmail(user.recovery_email);
+    }
+  }, [user]);
+
   return (
-    <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 space-y-4">
-      {/* Сообщение об успешной отправке */}
-      {submitSuccess && (
-        <div className="mb-4 p-4 bg-green-50 border border-green-200 text-green-700 rounded-md">
-          <p>✅ Спасибо! Ваше сообщение отправлено. Мы ответим в течение 1 рабочего дня.</p>
-        </div>
-      )}
-
-      {/* Тема обращения */}
-      <div>
-        <label htmlFor="help-topic" className="block text-sm font-medium text-gray-700 mb-1">
-          Тема обращения <span className="text-red-500">*</span>
-        </label>
-        <select
-          id="help-topic"
-          value={topic}
-          onChange={handleTopicChange}
-          required
-          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
-          disabled={isSubmitting}
-        >
-          <option value="">Выберите тему...</option>
-          <option value="bug_bot">Ошибка ИИ-консультанта</option>
-          <option value="bug_document">Ошибка в документе</option>
-          <option value="bug_login">Проблемы с входом</option>
-          <option value="feature_request">Предложение по улучшению</option>
-          <option value="other">Другое</option>
-        </select>
-      </div>
-
-      {/* Описание проблемы */}
-      <div>
-        <label htmlFor="help-message" className="block text-sm font-medium text-gray-700 mb-1">
-          Описание <span className="text-red-500">*</span>
-        </label>
-        <textarea
-          id="help-message"
-          rows={4}
-          value={message}
-          onChange={handleMessageChange}
-          placeholder="Опишите проблему или задайте вопрос..."
-          required
-          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
-          disabled={isSubmitting}
-        ></textarea>
-      </div>
-
-      {/* Скриншот */}
-      <div>
-        <label htmlFor="help-screenshot" className="block text-sm font-medium text-gray-700 mb-1">
-          Скриншот (не более 5 МБ)
-        </label>
-        <input
-          type="file"
-          id="help-screenshot"
-          accept="image/*"
-          onChange={handleScreenshotChange}
-          className="block w-full text-sm text-gray-500
-            file:mr-4 file:py-2 file:px-4
-            file:rounded-md file:border-0
-            file:text-sm file:font-semibold
-            file:bg-primary file:text-white
-            hover:file:bg-blue-700
-            focus:outline-none"
-          disabled={isSubmitting}
-        />
-        {screenshot && (
-          <p className="mt-1 text-sm text-gray-500">Выбран файл: {screenshot.name}</p>
-        )}
-      </div>
-
-      {/* Email для ответа */}
-      <div>
-        <label htmlFor="help-email" className="block text-sm font-medium text-gray-700 mb-1">
-          Email для ответа
-        </label>
-        <input
-          type="email"
-          id="help-email"
-          value={email}
-          onChange={handleEmailChange}
-          placeholder="ivan@example.com"
-          // pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$" // Простая валидация на клиенте
-          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary"
-          disabled={isSubmitting}
-        />
-        <p className="mt-1 text-xs text-gray-500">Укажите email, если хотите получить ответ.</p>
-      </div>
-
-      {/* Согласие на обработку ПД */}
-      <div className="flex items-start">
-        <div className="flex items-center h-5">
-          <input
-            id="help-consent"
-            type="checkbox"
-            checked={isConsentChecked}
-            onChange={handleConsentChange}
-            required
-            className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
-            disabled={isSubmitting}
-          />
-        </div>
-        <div className="ml-3 text-sm">
-          <label htmlFor="help-consent" className="text-gray-700">
-            Я согласен на <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">обработку персональных данных</a> в соответствии с ФЗ-152. <span className="text-red-500">*</span>
+    <div className="bg-white shadow rounded-lg p-6">
+      <h3 className="text-lg font-medium text-gray-900 mb-4">Форма обратной связи</h3>
+      
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Email */}
+        <div>
+          <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+            Email (опционально)
           </label>
+          <div className="mt-1">
+            <Input
+              type="email"
+              id="email"
+              name="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="your@email.com"
+              disabled={isSubmitting}
+              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+            />
+            <p className="mt-2 text-xs text-gray-500">
+              Укажите email, если хотите получить ответ.
+            </p>
+          </div>
         </div>
-      </div>
 
-      {/* Сообщение об ошибке отправки */}
-      {submitError && (
-        <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-md text-sm">
-          <p>❌ {submitError}</p>
+        {/* Тема */}
+        <div>
+          <label htmlFor="topic" className="block text-sm font-medium text-gray-700">
+            Тема обращения
+          </label>
+          <div className="mt-1">
+            <select
+              id="topic"
+              name="topic"
+              value={topic}
+              onChange={(e) => setTopic(e.target.value as SupportTopic)}
+              disabled={isSubmitting}
+              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+            >
+              <option value={SupportTopic.TechnicalIssue}>Техническая проблема</option>
+              <option value={SupportTopic.ImprovementSuggestion}>Предложение по улучшению</option>
+              <option value={SupportTopic.FunctionalityQuestion}>Вопрос по функциональности</option>
+              <option value={SupportTopic.Other}>Другое</option>
+            </select>
+          </div>
         </div>
-      )}
 
-      {/* Кнопка отправки */}
-      <div>
-        <button
-          type="submit"
-          disabled={isSubmitting || !isConsentChecked}
-          className={`w-full px-4 py-2 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-            isSubmitting || !isConsentChecked
-              ? 'bg-gray-400 cursor-not-allowed'
-              : 'bg-primary hover:bg-blue-700 focus:ring-primary'
-          }`}
-        >
-          {isSubmitting ? (
-            <span className="flex items-center justify-center">
-              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              Отправка...
-            </span>
-          ) : (
-            'Отправить сообщение'
+        {/* Сообщение */}
+        <div>
+          <label htmlFor="message" className="block text-sm font-medium text-gray-700">
+            Сообщение
+          </label>
+          <div className="mt-1">
+            <textarea
+              id="message"
+              name="message"
+              rows={4}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              required
+              disabled={isSubmitting}
+              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+              placeholder="Опишите ваш вопрос или проблему..."
+            />
+          </div>
+        </div>
+
+        {/* Скриншот */}
+        <div>
+          <label htmlFor="screenshot" className="block text-sm font-medium text-gray-700">
+            Скриншот (опционально)
+          </label>
+          <div className="mt-1 flex items-center">
+            <input
+              ref={fileInputRef}
+              type="file"
+              id="screenshot"
+              name="screenshot"
+              accept={LIMITS.SUPPORT.ALLOWED_SCREENSHOT_MIME_TYPES.join(',')}
+              onChange={handleScreenshotChange}
+              disabled={isSubmitting}
+              className="block w-full text-sm text-gray-500
+                file:mr-4 file:py-2 file:px-4
+                file:rounded-md file:border-0
+                file:text-sm file:font-semibold
+                file:bg-primary-50 file:text-primary-700
+                hover:file:bg-primary-100
+                disabled:opacity-50"
+            />
+          </div>
+          {screenshot && (
+            <div className="mt-2 flex items-center text-sm text-gray-500">
+              <span className="truncate">{screenshot.name}</span>
+              <button
+                type="button"
+                onClick={handleRemoveScreenshot}
+                disabled={isSubmitting}
+                className="ml-2 bg-white rounded-md text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+              >
+                <span className="sr-only">Удалить</span>
+                <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
           )}
-        </button>
-      </div>
-    </form>
+          <p className="mt-2 text-xs text-gray-500">
+            Максимальный размер: {LIMITS.SUPPORT.MAX_SCREENSHOT_SIZE_BYTES / (1024 * 1024)} МБ. Разрешённые форматы: JPG, PNG, WEBP, GIF.
+          </p>
+        </div>
+
+        {/* Ошибки и успех */}
+        {submitError && (
+          <div className="rounded-md bg-red-50 p-4">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-red-800">
+                  {submitError}
+                </h3>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {submitSuccess && (
+          <div className="rounded-md bg-green-50 p-4">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm font-medium text-green-800">
+                  Спасибо! Ваше обращение отправлено. Мы ответим в течение 1 рабочего дня.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* reCAPTCHA и Чекбокс согласия - Отложены */}
+        {/* 
+        <div className="relative flex items-start">
+          <div className="flex items-center h-5">
+            <input
+              id="consent"
+              name="consent"
+              type="checkbox"
+              required
+              className="focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300 rounded"
+            />
+          </div>
+          <div className="ml-3 text-sm">
+            <label htmlFor="consent" className="font-medium text-gray-700">
+              Я согласен с <a href="/privacy" className="text-primary-600 hover:text-primary-500">Политикой конфиденциальности</a> и даю согласие на обработку персональных данных согласно ФЗ-152.
+            </label>
+          </div>
+        </div>
+        */}
+
+        {/* Кнопка отправки */}
+        <div>
+          <Button
+            type="submit"
+            disabled={isSubmitting}
+            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+          >
+            {isSubmitting ? (
+              <>
+                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Отправка...
+              </>
+            ) : (
+              'Отправить обращение'
+            )}
+          </Button>
+        </div>
+      </form>
+
+      {/* Toast для отображения сообщений */}
+      {showToast && (
+        <Toast
+          message={toastMessage}
+          type={toastType}
+          onClose={() => setShowToast(false)}
+        />
+      )}
+    </div>
   );
 };
 
