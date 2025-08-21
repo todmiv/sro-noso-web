@@ -2,7 +2,7 @@
 
 import React, { ReactNode } from 'react';
 import Header from './Header';
-// import Footer from './Footer'; // Пока не реализован
+import Footer from './Footer'; // Импорт нового компонента Footer
 
 interface LayoutProps {
   children: ReactNode; // Содержимое, которое будет отображаться внутри макета (основная часть страницы)
@@ -20,7 +20,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       </main>
       
       {/* Подвал сайта */}
-      {/* <Footer /> */}
+      <Footer />
     </div>
   );
 };
