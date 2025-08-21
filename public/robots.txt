@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://todmiv.github.io/sro-noso-web/sitemap.xml
