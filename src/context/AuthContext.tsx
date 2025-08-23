@@ -1,35 +1,27 @@
 // src/context/AuthContext.tsx
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
-import { supabase } from '../services/supabaseClient'; // Импортируем клиента Supabase
-import { AuthData, UserProfile, UserRole } from '../types/user';
+import { supabase } from '../services/supabaseClient';
+import { AuthData, UserProfile, UserRole, MembershipStatus } from '../types/user';
 import { isMembershipExpired, isMembershipExpiringSoon } from '../utils/helpers';
-import { MembershipStatus } from '../types/user';
-import { COLORS } from '../utils/constants';
+import * as Sentry from "@sentry/react";
+import { isValidINN } from '../utils/validation';
+// Валидация работает корректно
 
-/**
- * Контекст аутентификации.
- *
- * Управляет состоянием аутентифицированного пользователя,
- * статусом загрузки, ошибками и предоставляет методы для входа/выхода.
- */
+interface VerifyINNResponse {
+  success: boolean;
+  message?: string;
+  fullName?: string;
+  membershipExpirationDate?: string;
+}
 
-// --- Типы для состояния и действий контекста ---
-
-/** Состояние контекста аутентификации */
 interface AuthState {
-  /** Данные аутентифицированного пользователя */
   user: UserProfile | null;
-  /** Флаг, указывающий, загружается ли состояние аутентификации (при инициализации) */
   loading: boolean;
-  /** Сообщение об ошибке, если произошла ошибка аутентификации */
   error: string | null;
-  /** Роль текущего пользователя (гость или член) */
   role: UserRole;
-  /** Вычисленный статус членства */
   membershipStatus: MembershipStatus | null;
 }
 
-/** Возможные действия для редьюсера */
 type AuthAction =
   | { type: 'LOGIN_START' }
   | { type: 'LOGIN_SUCCESS'; payload: AuthData }
@@ -37,322 +29,149 @@ type AuthAction =
   | { type: 'LOGOUT' }
   | { type: 'SET_USER'; payload: UserProfile }
   | { type: 'SET_ERROR'; payload: string }
-  | { type: 'CLEAR_ERROR' };
+  | { type: 'CLEAR_ERROR' }
+  | { type: 'SET_LOADING'; payload: boolean };
 
-// --- Начальное состояние ---
-
-/** Начальное состояние контекста */
-const initialState: AuthState = {
-  user: null,
-  loading: true, // Изначально true, так как состояние загружается при старте
-  error: null,
-  role: UserRole.Guest, // По умолчанию гость
-  membershipStatus: null,
-};
-
-// --- Контекст ---
-
-/** Интерфейс для значения контекста */
-interface AuthContextType extends AuthState {
-  /** Функция для входа по ИНН */
+export interface AuthContextType extends AuthState {
   login: (inn: string) => Promise<boolean>;
-  /** Функция для выхода */
   logout: () => Promise<void>;
-  /** Функция для обновления данных пользователя */
   updateUser: (userData: UserProfile) => void;
-  /** Функция для очистки ошибок */
   clearError: () => void;
 }
 
-// Создаем контекст с начальным значением undefined
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const initialState: AuthState = {
+  user: null,
+  loading: true,
+  error: null,
+  role: UserRole.Guest,
+  membershipStatus: null,
+};
 
-// --- Редьюсер ---
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-/** Редьюсер для управления состоянием аутентификации */
-function authReducer(state: AuthState, action: AuthAction): AuthState {
-  switch (action.type) {
-    case 'LOGIN_START':
-      return {
-        ...state,
-        loading: true,
-        error: null,
-      };
-    case 'LOGIN_SUCCESS':
-      return {
-        ...state,
-        user: action.payload.user,
-        role: action.payload.user.role,
-        membershipStatus: computeMembershipStatus(action.payload.user),
-        loading: false,
-        error: null,
-      };
-    case 'LOGIN_FAILURE':
-      return {
-        ...state,
-        user: null,
-        role: UserRole.Guest,
-        membershipStatus: null,
-        loading: false,
-        error: action.payload,
-      };
-    case 'LOGOUT':
-      return {
-        ...state,
-        user: null,
-        role: UserRole.Guest,
-        membershipStatus: null,
-        loading: false,
-        error: null,
-      };
-    case 'SET_USER':
-      return {
-        ...state,
-        user: action.payload,
-        role: action.payload.role,
-        membershipStatus: computeMembershipStatus(action.payload),
-        loading: false, // Предполагаем, что если пользователь установлен, загрузка завершена
-      };
-    case 'SET_ERROR':
-      return {
-        ...state,
-        error: action.payload,
-        loading: false,
-      };
-    case 'CLEAR_ERROR':
-      return {
-        ...state,
-        error: null,
-      };
-    default:
-      return state;
-  }
-}
-
-// --- Вспомогательная функция для вычисления статуса членства ---
-
-/**
- * Вычисляет статус членства на основе данных пользователя.
- * @param user - Данные пользователя.
- * @returns Вычисленный статус членства.
- */
 function computeMembershipStatus(user: UserProfile | null): MembershipStatus | null {
-  if (!user || user.role !== UserRole.Member) {
-    return null;
-  }
-
-  if (!user.membership_exp) {
-    // Если дата окончания не указана, считаем истёкшим
-    return MembershipStatus.Expired;
-  }
-
-  if (isMembershipExpired(user.membership_exp)) {
-    return MembershipStatus.Expired;
-  }
-
-  if (isMembershipExpiringSoon(user.membership_exp, 30)) { // 30 дней как порог
-    return MembershipStatus.Expiring;
-  }
-
+  if (!user || !user.membership_exp) return null;
+  if (isMembershipExpired(user.membership_exp)) return MembershipStatus.Expired;
+  if (isMembershipExpiringSoon(user.membership_exp, 30)) return MembershipStatus.Expiring;
   return MembershipStatus.Active;
 }
 
-// --- Провайдер контекста ---
-
-/** Свойства провайдера контекста */
-interface AuthProviderProps {
-  /** Дочерние компоненты, которые будут иметь доступ к контексту */
-  children: ReactNode;
+function authReducer(state: AuthState, action: AuthAction): AuthState {
+  switch (action.type) {
+    case 'LOGIN_START': return {...state, loading: true, error: null};
+    case 'LOGIN_SUCCESS': return {...state, user: action.payload.user, role: action.payload.user.role, 
+      membershipStatus: computeMembershipStatus(action.payload.user), loading: false, error: null};
+    case 'LOGIN_FAILURE': return {...state, user: null, role: UserRole.Guest, membershipStatus: null, 
+      loading: false, error: action.payload};
+    case 'LOGOUT': return {...state, user: null, role: UserRole.Guest, membershipStatus: null, 
+      loading: false, error: null};
+    case 'SET_USER': return {...state, user: action.payload, role: action.payload.role, 
+      membershipStatus: computeMembershipStatus(action.payload)};
+    case 'SET_ERROR': return {...state, error: action.payload, loading: false};
+    case 'CLEAR_ERROR': return {...state, error: null};
+    case 'SET_LOADING': return {...state, loading: action.payload};
+    default: return state;
+  }
 }
 
-/**
- * Провайдер контекста аутентификации.
- *
- * Оборачивает приложение и предоставляет состояние аутентификации
- * и методы для его управления всем дочерним компонентам.
- */
-export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
-
-  // Эффект для инициализации состояния аутентификации при монтировании
+  
   useEffect(() => {
     const initializeAuthState = async () => {
+      dispatch({ type: 'SET_LOADING', payload: true });
       try {
-        // Получаем текущую сессию пользователя из Supabase
-        const { data: { session }, error } = await supabase.auth.getSession();
+        const { data, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
 
-        if (error) {
-            console.error('Error getting session on init:', error);
-            dispatch({ type: 'SET_ERROR', payload: 'Ошибка при инициализации сессии.' });
-            dispatch({ type: 'LOGIN_FAILURE', payload: 'Ошибка при инициализации сессии.' });
-            return;
-        }
-
-        if (session?.user) {
-          // Если сессия существует, получаем данные пользователя из вашей таблицы `users`
-          const { data: userData, error: userError } = await supabase
+        if (data.session?.user) {
+          const { data: userData, error: fetchUserError } = await supabase
             .from('users')
             .select('*')
-            .eq('id', session.user.id)
-            .single();
-
-          if (userError || !userData) {
-            console.error('Error fetching user data on init:', userError);
-            dispatch({ type: 'SET_ERROR', payload: 'Ошибка при загрузке данных пользователя.' });
-            dispatch({ type: 'LOGIN_FAILURE', payload: 'Ошибка при загрузке данных пользователя.' });
-            return;
-          }
-
-          const authData: AuthData = {
-            user: userData,
-            accessToken: session.access_token,
-            refreshToken: session.refresh_token,
-          };
-
-          dispatch({ type: 'LOGIN_SUCCESS', payload: authData });
+            .eq('id', data.session.user.id)
+            .maybeSingle();
+          
+          if (fetchUserError) throw fetchUserError;
+          
+          userData 
+            ? dispatch({ type: 'LOGIN_SUCCESS', payload: { 
+                user: userData, 
+                accessToken: data.session.access_token, 
+                refreshToken: data.session.refresh_token 
+              }})
+            : await supabase.auth.signOut();
+        } 
+      } catch (err: any) {
+        console.error('Auth init error:', err);
+        Sentry.captureException(err);
+        if (err instanceof Error) {
+          dispatch({ type: 'SET_ERROR', payload: err.message || 'Ошибка инициализации' });
         } else {
-          // Нет активной сессии, пользователь - гость
-          dispatch({ type: 'LOGIN_FAILURE', payload: 'Нет активной сессии.' });
+          dispatch({ type: 'LOGOUT' });
         }
-      } catch (err) {
-        console.error('Unexpected error during auth init:', err);
-        dispatch({ type: 'SET_ERROR', payload: 'Произошла непредвиденная ошибка при инициализации.' });
-        dispatch({ type: 'LOGIN_FAILURE', payload: 'Произошла непредвиденная ошибка при инициализации.' });
       } finally {
-        // В любом случае, после попытки инициализации, убираем состояние загрузки
-        // dispatch({ type: 'SET_LOADING', payload: false }); // Не нужен отдельный экшен
+        dispatch({ type: 'SET_LOADING', payload: false });
       }
     };
-
+    
     initializeAuthState();
-  }, []); // Пустой массив зависимостей - запускается только один раз при монтировании
+  }, []);
 
-  /**
-   * Функция для входа по ИНН.
-   * Взаимодействует с authService (который будет создан позже).
-   * @param inn - ИНН пользователя.
-   * @returns true, если вход успешен, иначе false.
-   */
   const login = async (inn: string): Promise<boolean> => {
     dispatch({ type: 'LOGIN_START' });
     try {
-      // TODO: Здесь будет вызов authService.verifyINNAndLogin(inn)
-      // Пока имитируем успешный вход для тестирования
-      // В реальности authService.verifyINNAndLogin должен возвращать Promise<AuthData | null>
-      
-      // Имитация асинхронного вызова
-      // const authData = await authService.verifyINNAndLogin(inn);
-      
-      // if (authData) {
-      //   dispatch({ type: 'LOGIN_SUCCESS', payload: authData });
-      //   return true;
-      // } else {
-      //   dispatch({ type: 'LOGIN_FAILURE', payload: 'Не удалось войти. Проверьте ИНН.' });
-      //   return false;
-      // }
-      
-      // --- ВРЕМЕННАЯ ИМИТАЦИЯ ---
-      console.warn('Login function is a stub. authService.verifyINNAndLogin needs to be implemented.');
-      // Для демонстрации, предположим, что вход успешен
-      const mockUser: UserProfile = {
-        id: 'mock-user-id-' + Date.now(),
-        inn: inn,
-        full_name: `Организация с ИНН ${inn}`,
-        role: UserRole.Member,
-        membership_exp: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // +30 дней
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      const mockAuthData: AuthData = {
-        user: mockUser,
-        accessToken: 'mock-access-token',
-        refreshToken: 'mock-refresh-token',
-      };
-      dispatch({ type: 'LOGIN_SUCCESS', payload: mockAuthData });
+      if (!isValidINN(inn)) throw new Error('Некорректный ИНН');
+
+      const { data, error: verificationError } = await supabase.functions
+        .invoke<VerifyINNResponse>('verify-inn', { body: { inn } });
+      if (verificationError || !data?.success) 
+        throw new Error(data?.message || verificationError?.message || 'Ошибка проверки');
+
+const { data: userData, error: userError } = await supabase
+  .from('users')
+  .upsert({
+    inn: inn,
+    full_name: data.fullName || null,
+    role: 'member' as const,
+    membership_exp: data.membershipExpirationDate || null,
+    updated_at: new Date().toISOString(),
+  })
+  .select()
+  .single();
+
+      if (userError) throw userError;
+
+      dispatch({ type: 'LOGIN_SUCCESS', payload: { user: userData, accessToken: null, refreshToken: null } });
       return true;
-      // --- КОНЕЦ ИМИТАЦИИ ---
-      
-    } catch (error: any) {
-      console.error('Login error:', error);
-      const errorMessage = error.message || 'Произошла ошибка при попытке входа.';
-      dispatch({ type: 'LOGIN_FAILURE', payload: errorMessage });
+    } catch (err: any) {
+      console.error('Login error:', err);
+      Sentry.captureException(err);
+      dispatch({ type: 'LOGIN_FAILURE', payload: err.message });
       return false;
     }
   };
 
-  /**
-   * Функция для выхода.
-   */
-  const logout = async (): Promise<void> => {
-    try {
-      // Вызываем метод выхода из Supabase
-      const { error } = await supabase.auth.signOut();
-
-      if (error) {
-        console.error('Error signing out:', error);
-        dispatch({ type: 'SET_ERROR', payload: 'Ошибка при выходе из системы.' });
-        // Даже если Supabase вернул ошибку, мы всё равно обновляем локальное состояние
-      }
-
-      // Обновляем локальное состояние
-      dispatch({ type: 'LOGOUT' });
-    } catch (err) {
-      console.error('Unexpected error during logout:', err);
-      dispatch({ type: 'SET_ERROR', payload: 'Произошла непредвиденная ошибка при выходе.' });
-      // Даже если произошла ошибка, мы всё равно обновляем локальное состояние
-      dispatch({ type: 'LOGOUT' });
-    }
-  };
-
-  /**
-   * Функция для обновления данных пользователя в состоянии.
-   * Может быть вызвана, например, после фоновой проверки статуса.
-   * @param userData - Обновленные данные пользователя.
-   */
-  const updateUser = (userData: UserProfile) => {
-    dispatch({ type: 'SET_USER', payload: userData });
-  };
-
-  /**
-   * Функция для очистки ошибок.
-   */
-  const clearError = () => {
-    dispatch({ type: 'CLEAR_ERROR' });
-  };
-
-  // Формируем значение контекста
   const contextValue: AuthContextType = {
     ...state,
     login,
-    logout,
-    updateUser,
-    clearError,
+    logout: async () => {
+      try {
+        await supabase.auth.signOut();
+        dispatch({ type: 'LOGOUT' });
+      } catch (err: any) {
+        console.error('Logout error:', err);
+        Sentry.captureException(err);
+      }
+    },
+    updateUser: (userData) => dispatch({ type: 'SET_USER', payload: userData }),
+    clearError: () => dispatch({ type: 'CLEAR_ERROR' })
   };
 
-  return (
-    <AuthContext.Provider value={contextValue}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>;
 };
 
-// --- Пользовательский хук ---
-
-/**
- * Пользовательский хук для использования контекста аутентификации.
- *
- * Должен использоваться внутри компонентов, обернутых в AuthProvider.
- *
- * @returns Значение контекста аутентификации.
- * @throws {Error} Если хук используется вне AuthProvider.
- */
 export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within AuthProvider');
   return context;
 };
-
-// Экспорт контекста и провайдера как named exports
-export default AuthContext;
