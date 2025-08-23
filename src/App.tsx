@@ -1,5 +1,5 @@
 // src/App.tsx
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import './App.css'; // Глобальные стили приложения (если нужны)
 
@@ -18,10 +18,10 @@ import NotFoundPage from './pages/NotFoundPage'; // Страница 404
 
 // === Импорт контекста аутентификации ===
 import { AuthProvider } from './context/AuthContext'; // Импортируем провайдер
-import { useAuth } from './hooks/useAuth'; // Импортируем хук
 
 // === Импорт утилит и хуков ===
-import { useLocalStorage } from './hooks/useLocalStorage';
+import useAuth from './hooks/useAuth'; // Импортируем хук
+import useLocalStorage from './hooks/useLocalStorage'; // <-- Изменено: без {}
 
 const App: React.FC = () => {
   // === Получение текущего местоположения для SEO ===
@@ -108,7 +108,7 @@ const App: React.FC = () => {
 // === Вспомогательный компонент PrivateRoute ===
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth(); // Получаем состояние аутентификации
-  const location = useLocation();
+// ===  const location = useLocation();
 
   // Пока состояние аутентификации загружается, можно показать спиннер или просто ничего
   if (loading) {
