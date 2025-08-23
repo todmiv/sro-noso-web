@@ -1,6 +1,6 @@
 // src/hooks/useAuth.ts
 import { useContext } from 'react';
-import AuthContext, { AuthContextType } from '../context/AuthContext';
+import { AuthContext, AuthContextType } from '../context/AuthContext';
 
 /**
  * Пользовательский хук для использования контекста аутентификации.
