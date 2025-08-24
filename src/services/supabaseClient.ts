@@ -1,40 +1,6 @@
 // src/services/supabaseClient.ts
 import { createClient } from '@supabase/supabase-js';
 import { Database } from '../types/database';
-  public: {
-    Tables: {
-      users: {
-        Row: {
-          id: string;
-          inn: string;
-        role: 'member' | 'guest' | 'admin';
-          full_name: string | null;
-          membership_exp: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          inn: string;
-          role?: string;
-          full_name?: string | null;
-          membership_exp?: string | null;
-          created_at?: string;
-          updated_at: string;
-        };
-        Update: {
-          id?: string;
-          inn?: string;
-          role?: string;
-          full_name?: string | null;
-          membership_exp?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-      };
-    };
-  };
-}
 
 /**
  * Инициализация клиента Supabase.
@@ -46,8 +12,8 @@ import { Database } from '../types/database';
  */
 
 // Убедимся, что переменные окружения определены
-const supabaseUrl = process.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl) {
     throw new Error('VITE_SUPABASE_URL is not defined in the environment variables.');
