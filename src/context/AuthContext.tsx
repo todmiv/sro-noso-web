@@ -18,7 +18,7 @@ interface AuthState {
   user: UserProfile | null;
   loading: boolean;
   error: string | null;
-  role: UserRole;
+  role: UserRole; // Теперь тип UserRole - это union из строковых литералов
   membershipStatus: MembershipStatus | null;
 }
 
@@ -43,7 +43,7 @@ const initialState: AuthState = {
   user: null,
   loading: true,
   error: null,
-  role: UserRole.Guest,
+  role: 'guest',
   membershipStatus: null,
 };
 
@@ -59,11 +59,17 @@ function computeMembershipStatus(user: UserProfile | null): MembershipStatus | n
 function authReducer(state: AuthState, action: AuthAction): AuthState {
   switch (action.type) {
     case 'LOGIN_START': return {...state, loading: true, error: null};
-    case 'LOGIN_SUCCESS': return {...state, user: action.payload.user, role: action.payload.user.role, 
-      membershipStatus: computeMembershipStatus(action.payload.user), loading: false, error: null};
-    case 'LOGIN_FAILURE': return {...state, user: null, role: UserRole.Guest, membershipStatus: null, 
+    case 'LOGIN_SUCCESS': return {
+      ...state,
+      user: action.payload.user,
+      role: action.payload.user.role as UserRole,
+      membershipStatus: computeMembershipStatus(action.payload.user),
+      loading: false,
+      error: null
+    };
+    case 'LOGIN_FAILURE': return {...state, user: null, role: 'guest', membershipStatus: null, 
       loading: false, error: action.payload};
-    case 'LOGOUT': return {...state, user: null, role: UserRole.Guest, membershipStatus: null, 
+    case 'LOGOUT': return {...state, user: null, role: 'guest', membershipStatus: null, 
       loading: false, error: null};
     case 'SET_USER': return {...state, user: action.payload, role: action.payload.role, 
       membershipStatus: computeMembershipStatus(action.payload)};
@@ -127,15 +133,15 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
       if (verificationError || !data?.success) 
         throw new Error(data?.message || verificationError?.message || 'Ошибка проверки');
 
-const { data: userData, error: userError } = await supabase
-  .from('users')
-  .upsert({
-    inn: inn,
-    full_name: data.fullName || null,
-    role: 'member' as const,
-    membership_exp: data.membershipExpirationDate || null,
-    updated_at: new Date().toISOString(),
-  })
+  const { data: userData, error: userError } = await supabase
+    .from('users')
+    .upsert({
+      inn,
+      full_name: data?.fullName || null,
+      role: 'member' as UserRole,
+      membership_exp: data?.membershipExpirationDate || null,
+      updated_at: new Date().toISOString()
+    })
   .select()
   .single();
 
