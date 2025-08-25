@@ -1,6 +1,6 @@
 // src/components/ui/Button.tsx
 
-import React, { ButtonHTMLAttributes, forwardRef } from 'react';
+import { ButtonHTMLAttributes, forwardRef } from 'react';
 
 // Определяем типы пропсов
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
