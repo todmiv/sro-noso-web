@@ -164,9 +164,12 @@ const LoginForm: React.FC = () => {
       {/* Toast для отображения сообщений */}
       {showToast && (
         <Toast
-          message={toastMessage}
-          type={toastType}
-          onClose={() => setShowToast(false)}
+          toast={{
+            id: 'login-toast',
+            type: toastType,
+            description: toastMessage,
+          }}
+          onDismiss={() => setShowToast(false)}
         />
       )}
     </div>
