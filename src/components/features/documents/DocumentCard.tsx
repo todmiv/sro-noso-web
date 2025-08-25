@@ -1,7 +1,7 @@
 // src/components/features/documents/DocumentCard.tsx
 
 import React from 'react';
-import { Link } from 'react-router-dom';
+// Удален неиспользуемый импорт Link
 // import Button from '../../ui/Button'; // Можно использовать, если нужно
 // import Modal from '../../ui/Modal'; // Для предварительного просмотра PDF
 // import { Document } from '../../../types/document'; // Будет создан позже

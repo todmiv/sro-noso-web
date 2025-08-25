@@ -1,4 +1,4 @@
--- Включаем RLS для всех таблиц
+-- Включаем RLS только после создания таблиц
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;

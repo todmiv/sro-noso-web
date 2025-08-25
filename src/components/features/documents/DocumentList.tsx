@@ -3,15 +3,9 @@ import React, { useCallback } from 'react';
 import useDocuments from '../../../hooks/useDocuments';
 import DocumentCard from './DocumentCard';
 import SearchBar from './SearchBar';
-import SortDropdown, { SortOption } from './SortDropdown';
+import SortDropdown from './SortDropdown';
+import { DocumentSortOption } from '../../../types/document';
 import Button from '../../ui/Button';
-
-/**
- * Компонент для отображения списка документов.
- *
- * Реализует сценарий 2.3 из ТЗ: каталог открытых документов с поиском и сортировкой.
- * Использует useDocuments для управления состоянием и логикой.
- */
 
 const DocumentList: React.FC = () => {
   const {
@@ -25,7 +19,7 @@ const DocumentList: React.FC = () => {
     setSortBy,
     searchQuery,
     sortBy,
-  } = useDocuments({ pageSize: 20 }); // Используем пагинацию по 20 документов
+  } = useDocuments({ pageSize: 20 });
 
   // Обработчик изменения поискового запроса
   const handleSearchChange = useCallback((query: string) => {
@@ -33,7 +27,7 @@ const DocumentList: React.FC = () => {
   }, [setSearchQuery]);
 
   // Обработчик изменения сортировки
-  const handleSortChange = useCallback((sort: SortOption) => {
+  const handleSortChange = useCallback((sort: DocumentSortOption) => {
     setSortBy(sort);
   }, [setSortBy]);
 
@@ -42,18 +36,16 @@ const DocumentList: React.FC = () => {
       {/* Панель инструментов: поиск и сортировка */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex-grow">
-          <SearchBar
-            value={searchQuery}
-            onChange={handleSearchChange}
+          <SearchBar 
+            initialValue={searchQuery}
+            onSearch={handleSearchChange}
             placeholder="Поиск по названию документа..."
-            disabled={loading}
           />
         </div>
         <div className="flex-shrink-0">
-          <SortDropdown
+          <SortDropdown 
             value={sortBy}
             onChange={handleSortChange}
-            disabled={loading}
           />
         </div>
       </div>
@@ -107,7 +99,14 @@ const DocumentList: React.FC = () => {
       {documents.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {documents.map((doc) => (
-            <DocumentCard key={doc.id} document={doc} />
+            <DocumentCard 
+              key={doc.id} 
+              document={{ 
+                ...doc, 
+                file_size: doc.file_size || 0, // Обработка null
+                mime_type: doc.mime_type || '' // Обработка null
+              }} 
+            />
           ))}
         </div>
       )}

@@ -25,7 +25,7 @@ import useLocalStorage from './hooks/useLocalStorage'; // <-- Изменено: 
 
 const App: React.FC = () => {
   // === Получение текущего местоположения для SEO ===
-  const location = useLocation();
+  // Удалена неиспользуемая переменная location
 
   // === Обработка баннера о локальном хранилище (пункт 6 ТЗ, пункт 8 обсуждения) ===
   const [bannerClosed, setBannerClosed] = useLocalStorage<boolean>('idb_banner_closed', false);
