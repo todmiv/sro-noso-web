@@ -91,21 +91,42 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
         if (sessionError) throw sessionError;
 
         if (data.session?.user) {
-          const { data: userData, error: fetchUserError } = await supabase
-            .from('users')
-            .select('*')
-            .eq('id', data.session.user.id)
-            .maybeSingle();
+        const { data: userData, error: fetchUserError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', data.session.user.id)
+          .maybeSingle();
+        
+        if (fetchUserError) throw fetchUserError;
+        
+        if (userData) {
+          // Create a complete UserProfile object with default values for new fields
+          // Create a UserProfile object with safe property access
+          // Handle potential missing properties in userData
+          const userProfile: UserProfile = {
+            id: userData.id,
+            inn: userData.inn,
+            full_name: userData.full_name,
+            role: userData.role as UserRole,
+            membership_exp: userData.membership_exp,
+            recovery_email: ('recovery_email' in userData) ? (userData.recovery_email as string | null) : null,
+            created_at: ('created_at' in userData) ? (userData.created_at as string) : new Date().toISOString(),
+            updated_at: ('updated_at' in userData) ? (userData.updated_at as string) : new Date().toISOString(),
+          };
           
-          if (fetchUserError) throw fetchUserError;
+          // For backward compatibility with old user records
+          if (!userProfile.recovery_email) userProfile.recovery_email = null;
+          if (!userProfile.created_at) userProfile.created_at = new Date().toISOString();
+          if (!userProfile.updated_at) userProfile.updated_at = new Date().toISOString();
           
-          userData 
-            ? dispatch({ type: 'LOGIN_SUCCESS', payload: { 
-                user: userData, 
-                accessToken: data.session.access_token, 
-                refreshToken: data.session.refresh_token 
-              }})
-            : await supabase.auth.signOut();
+          dispatch({ type: 'LOGIN_SUCCESS', payload: { 
+            user: userProfile, 
+            accessToken: data.session.access_token, 
+            refreshToken: data.session.refresh_token 
+          }});
+        } else {
+          await supabase.auth.signOut();
+        }
         } 
       } catch (err: any) {
         console.error('Auth init error:', err);
@@ -133,21 +154,42 @@ export const AuthProvider: React.FC<{children: ReactNode}> = ({ children }) => {
       if (verificationError || !data?.success) 
         throw new Error(data?.message || verificationError?.message || 'Ошибка проверки');
 
-  const { data: userData, error: userError } = await supabase
-    .from('users')
-    .upsert({
-      inn,
-      full_name: data?.fullName || null,
-      role: 'member' as UserRole,
-      membership_exp: data?.membershipExpirationDate || null,
-      updated_at: new Date().toISOString()
-    })
-  .select()
-  .single();
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .upsert({
+          inn,
+          full_name: data?.fullName || null,
+          role: 'member' as UserRole,
+          membership_exp: data?.membershipExpirationDate || null,
+          recovery_email: null, // Add missing field
+          created_at: new Date().toISOString(), // Add missing field
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single();
 
       if (userError) throw userError;
 
-      dispatch({ type: 'LOGIN_SUCCESS', payload: { user: userData, accessToken: null, refreshToken: null } });
+      // Create a complete UserProfile object with default values
+      // Create a UserProfile object with safe property access
+      // Handle potential missing properties in userData
+      const userProfile: UserProfile = {
+        id: userData.id,
+        inn: userData.inn,
+        full_name: userData.full_name,
+        role: userData.role as UserRole,
+        membership_exp: userData.membership_exp,
+        recovery_email: ('recovery_email' in userData) ? (userData.recovery_email as string | null) : null,
+        created_at: ('created_at' in userData) ? (userData.created_at as string) : new Date().toISOString(),
+        updated_at: ('updated_at' in userData) ? (userData.updated_at as string) : new Date().toISOString(),
+      };
+      
+      // For backward compatibility with old user records
+      if (!userProfile.recovery_email) userProfile.recovery_email = null;
+      if (!userProfile.created_at) userProfile.created_at = new Date().toISOString();
+      if (!userProfile.updated_at) userProfile.updated_at = new Date().toISOString();
+      
+      dispatch({ type: 'LOGIN_SUCCESS', payload: { user: userProfile, accessToken: null, refreshToken: null } });
       return true;
     } catch (err: any) {
       console.error('Login error:', err);
