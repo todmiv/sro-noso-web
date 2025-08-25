@@ -1,10 +1,9 @@
 // src/components/features/chat/ChatInterface.tsx
-import React, { useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import useChat from '../../../hooks/useChat';
 import Message from './Message';
 import ChatInput from './ChatInput';
-import Button from '../../ui/Button';
 
 /**
  * Компонент основного интерфейса чата ИИ-консультанта.
@@ -14,19 +13,18 @@ import Button from '../../ui/Button';
  */
 
 const ChatInterface: React.FC = () => {
-  const { user, role } = useAuth();
+  const { role } = useAuth();
   const {
     messages,
     isLoading,
     error,
-    isLimitExceeded,
-    currentQuestion,
-    sendQuestion,
-    setCurrentQuestion,
-    clearError,
-    isInputDisabled,
-    maxQuestionLength,
+    sendMessage,
+    clearError: chatClearError,
+    maxQuestionLength
   } = useChat();
+
+  // State for user input
+  const [currentQuestion, setCurrentQuestion] = useState('');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -77,7 +75,7 @@ const ChatInterface: React.FC = () => {
         )}
 
         {messages.map((message, index) => (
-          <Message key={index} message={message} />
+          <Message key={index} content={message.content} sender={message.sender} />
         ))}
 
         {isLoading && (
@@ -161,13 +159,12 @@ const ChatInterface: React.FC = () => {
         )}
 
         <ChatInput
-          value={currentQuestion}
-          onChange={(e) => setCurrentQuestion(e.target.value)}
+          // Updated to match the expected props
+          inputValue={currentQuestion}
+          onInputChange={(value) => setCurrentQuestion(value)}
           onSend={handleSend}
           onKeyDown={handleKeyDown}
-          disabled={isInputDisabled}
-          maxLength={maxQuestionLength}
-          isLoading={isLoading}
+          disabled={isLoading}
         />
 
         <div className="mt-2 flex justify-between items-center text-xs text-gray-500">
