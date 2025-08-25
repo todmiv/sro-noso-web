@@ -1,6 +1,6 @@
 // src/components/ui/Input.tsx
 
-import React, { InputHTMLAttributes, forwardRef } from 'react';
+import { InputHTMLAttributes, forwardRef } from 'react';
 
 // Определяем типы пропсов
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
