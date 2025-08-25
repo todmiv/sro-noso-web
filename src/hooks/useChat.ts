@@ -1,83 +1,66 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { ChatMessage, User } from '../types/database';
-
-type ChatRole = 'user' | 'assistant';
-
-interface ChatHistoryItem extends ChatMessage {
-  id: string;
-  role: ChatRole;
-  content: string;
-}
+import { ChatHistoryItem } from '../types/chat';
+import * as chatService from '../services/chatService';
 
 const useChat = () => {
   const { user } = useAuth();
   const [messages, setMessages] = useState<ChatHistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isLimitExceeded, setIsLimitExceeded] = useState(false);
-  const sessionIdRef = useRef<string | null>(null);
-
-  // Загрузка истории чата
-  const loadChatHistory = useCallback(async () => {
-    if (!user) return;
+  
+  // Load chat history
+  useEffect(() => {
+    const loadChatHistory = async () => {
+      try {
+        setIsLoading(true);
+        const history = await chatService.getGuestChatHistory();
+        setMessages(history || []);
+      } catch (err) {
+        setError('Ошибка загрузки истории чата');
+      } finally {
+        setIsLoading(false);
+      }
+    };
     
-    try {
-      // Заглушка для реализации
-      const mockHistory: ChatHistoryItem[] = [
-        { 
-          id: '1', 
-          role: 'assistant', 
-          content: 'Чем могу помочь?',
-          user_id: user.id,
-          timestamp: new Date().toISOString()
-        }
-      ];
-      setMessages(mockHistory);
-    } catch (err) {
-      setError('Ошибка загрузки истории');
-    }
-  }, [user]);
+    loadChatHistory();
+  }, []);
 
-  // Отправка сообщения
-  const sendMessage = useCallback(async (content: string) => {
+  // Send message
+  const sendMessage = async (content: string) => {
     if (!content.trim()) return;
     
     setIsLoading(true);
+    setError(null);
+    
     try {
-      // Добавление сообщения пользователя
-      const userMessage: ChatHistoryItem = {
+      const newMessage: ChatHistoryItem = {
         id: `msg-${Date.now()}`,
         role: 'user',
         content,
-        user_id: user?.id || 'guest',
         timestamp: new Date().toISOString()
       };
       
-      setMessages(prev => [...prev, userMessage]);
+      // Optimistically add user message
+      setMessages(prev => [...prev, newMessage]);
       
-      // Заглушка для ответа ИИ
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Get AI response
+      const aiResponse = await chatService.askAI({ content }, user?.role || 'guest');
       
       const aiMessage: ChatHistoryItem = {
         id: `msg-${Date.now() + 1}`,
         role: 'assistant',
-        content: `Ответ на: "${content}"`,
-        user_id: 'ai-system',
+        content: aiResponse.answer,
         timestamp: new Date().toISOString()
       };
       
       setMessages(prev => [...prev, aiMessage]);
     } catch (err) {
-      setError('Ошибка отправки сообщения');
+      setError(err instanceof Error ? err.message : 'Ошибка отправки сообщения');
     } finally {
       setIsLoading(false);
     }
-  }, [user]);
-
-  useEffect(() => {
-    loadChatHistory();
-  }, [loadChatHistory]);
+  };
 
   return {
     messages,
