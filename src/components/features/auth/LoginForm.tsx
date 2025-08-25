@@ -18,10 +18,7 @@ const LoginForm: React.FC = () => {
   const [inn, setInn] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [localError, setLocalError] = useState<string | null>(null);
-  const [showToast, setShowToast] = useState<boolean>(false);
-  const [toastMessage, setToastMessage] = useState<string>('');
-  const [toastType, setToastType] = useState<'success' | 'error'>('success');
-
+  const [toast, setToast] = useState<{ id: string; type: 'success' | 'error'; description: string } | null>(null);
   // Обработчик изменения ввода ИНН
   const handleInnChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.replace(/\D/g, ''); // Оставляем только цифры
@@ -32,9 +29,16 @@ const LoginForm: React.FC = () => {
 
   // Функция для показа Toast
   const showToastMessage = useCallback((message: string, type: 'success' | 'error' = 'success') => {
-    setToastMessage(message);
-    setToastType(type);
-    setShowToast(true);
+    setToast({
+            id: 'login-toast',
+      type,
+      description: message
+    });
+  }, []);
+
+  // Функция для закрытия Toast
+  const onDismiss = useCallback(() => {
+    setToast(null);
   }, []);
 
   // Обработчик отправки формы
@@ -70,7 +74,7 @@ const LoginForm: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+};
 
   // Эффект для обработки ошибок из контекста
   useEffect(() => {
@@ -88,7 +92,7 @@ const LoginForm: React.FC = () => {
   }, []);
 
   return (
-    <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-xl shadow-md">
+    <div className="login-form max-w-md w-full space-y-8 p-8 bg-white rounded-xl shadow-md">
       <div>
         <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
           Вход в личный кабинет
@@ -161,15 +165,11 @@ const LoginForm: React.FC = () => {
         </div>
       </form>
 
-      {/* Toast для отображения сообщений */}
-      {showToast && (
+      {toast && (
         <Toast
-          toast={{
-            id: 'login-toast',
-            type: toastType,
-            description: toastMessage,
-          }}
-          onDismiss={() => setShowToast(false)}
+          message={toast.description}
+          type={toast.type}
+          onClose={onDismiss}
         />
       )}
     </div>
@@ -177,3 +177,4 @@ const LoginForm: React.FC = () => {
 };
 
 export default LoginForm;
+
