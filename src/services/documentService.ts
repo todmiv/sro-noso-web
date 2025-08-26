@@ -17,9 +17,9 @@ export const getDocuments = async (params: DocumentQueryParams): Promise<Documen
       file_path: item.file_path,
       mime_type: item.mime_type,
       file_size: item.file_size,
-      is_public: item.is_public === null ? false : item.is_public,
+      is_public: item.is_public ?? false,
       created_at: item.created_at || new Date().toISOString(),
-      updated_at: item.updated_at || new Date().toISOString()
+      updated_at: item.created_at || new Date().toISOString() // В MVP updated_at совпадает с created_at
     })) || [];
 
     return {
@@ -31,4 +31,3 @@ export const getDocuments = async (params: DocumentQueryParams): Promise<Documen
     throw error;
   }
 };
-
