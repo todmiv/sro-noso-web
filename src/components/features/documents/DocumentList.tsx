@@ -4,7 +4,6 @@ import useDocuments from '../../../hooks/useDocuments';
 import DocumentCard from './DocumentCard';
 import SearchBar from './SearchBar';
 import SortDropdown from './SortDropdown';
-import { DocumentSortOption } from '../../../types/document';
 import Button from '../../ui/Button';
 
 const DocumentList: React.FC = () => {
@@ -68,7 +67,7 @@ const DocumentList: React.FC = () => {
             </div>
             <div className="ml-3">
               <h3 className="text-sm font-medium text-red-800">
-                {error}
+                {error?.message || 'Произошла ошибка'}
               </h3>
               <div className="mt-2 text-sm text-red-700">
                 <button
