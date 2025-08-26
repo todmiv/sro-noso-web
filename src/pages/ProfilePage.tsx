@@ -1,6 +1,6 @@
 // src/pages/ProfilePage.tsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 // import { useNavigate } from 'react-router-dom'; // Для навигации после входа
 // import { useAuth } from '../hooks/useAuth'; // Будет создан позже
 // import { verifyINN } from '../services/authService'; // Будет создан позже
