@@ -1,21 +1,15 @@
 // src/pages/ProfilePage.tsx
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 // import { useNavigate } from 'react-router-dom'; // Для навигации после входа
-// import { useAuth } from '../hooks/useAuth'; // Будет создан позже
+import useAuth from '../hooks/useAuth';
 // import { verifyINN } from '../services/authService'; // Будет создан позже
-import { isValidINN } from '../utils/helpers'; // Будет создан позже
+// UserProfile больше не используется в этом компоненте
+import { isValidINN } from '../utils/helpers';
 
 const ProfilePage: React.FC = () => {
-  // === Состояние аутентификации (заглушка) ===
-  // const { isAuthenticated, user, login } = useAuth();
-  const isAuthenticated = false; // Заглушка
-  // const user = { 
-  //   inn: "1234567890", 
-  //   full_name: "ООО 'СтройГарант'", 
-  //   membership_exp: new Date('2025-12-31'), 
-  //   role: 'member' 
-  // }; // Заглушка
+  // === Состояние аутентификации ===
+  const { isAuthenticated, user } = useAuth();
   // const navigate = useNavigate();
 
   // === Состояние формы входа ===
@@ -25,8 +19,8 @@ const ProfilePage: React.FC = () => {
   // const [attempts, setAttempts] = useState<number>(0); // Для ограничения попыток
 
   // === Состояние для отображения секции членства ===
-  // const [membershipStatus, setMembershipStatus] = useState<'active' | 'expiring' | 'expired' | 'excluded' | null>(null);
-  // const [daysUntilExpiry, setDaysUntilExpiry] = useState<number | null>(null);
+  const [membershipStatus, setMembershipStatus] = useState<'active' | 'expiring' | 'expired' | 'excluded' | null>(null);
+  const [daysUntilExpiry, setDaysUntilExpiry] = useState<number | null>(null);
 
   // === Обработчик изменения ИНН ===
   const handleInnChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -89,25 +83,37 @@ const ProfilePage: React.FC = () => {
     }
   };
 
-  // === Эффект для вычисления статуса членства (заглушка) ===
-  // useEffect(() => {
-  //   if (isAuthenticated && user?.membership_exp) {
-  //     const expDate = new Date(user.membership_exp);
-  //     const today = new Date();
-  //     const diffTime = expDate.getTime() - today.getTime();
-  //     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      // Обработка статуса "Приостановлено"
+      if (user.membership_status === 'Приостановлено') {
+        setMembershipStatus('excluded');
+        setDaysUntilExpiry(null);
+        return;
+      }
 
-  //     if (diffDays > 90) {
-  //       setMembershipStatus('active');
-  //     } else if (diffDays > 0) {
-  //       setMembershipStatus('expiring');
-  //       setDaysUntilExpiry(diffDays);
-  //     } else {
-  //       setMembershipStatus('expired');
-  //     }
-  //     // Статус 'excluded' должен приходить из user.role или отдельного поля
-  //   }
-  // }, [isAuthenticated, user]);
+      // Обработка даты окончания членства
+      if (user.membership_exp) {
+        const expDate = new Date(user.membership_exp);
+        const today = new Date();
+        const diffTime = expDate.getTime() - today.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        if (diffDays > 90) {
+          setMembershipStatus('active');
+        } else if (diffDays > 0) {
+          setMembershipStatus('expiring');
+          setDaysUntilExpiry(diffDays);
+        } else {
+          setMembershipStatus('expired');
+          setDaysUntilExpiry(0);
+        }
+      } else {
+        setMembershipStatus('expired');
+        setDaysUntilExpiry(null);
+      }
+    }
+  }, [isAuthenticated, user]);
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
@@ -197,12 +203,12 @@ const ProfilePage: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <p className="text-sm text-gray-500">ИНН</p>
-                <p className="font-medium">{/*user?.inn || 'Не указан'*/}1234567890</p>
+                <p className="font-medium">{user?.inn || 'Не указан'}</p>
               </div>
               
               <div>
                 <p className="text-sm text-gray-500">Организация</p>
-                <p className="font-medium">{/*user?.full_name || 'Не указана'*/}ООО "СтройГарант"</p>
+                <p className="font-medium">{user?.full_name || 'Не указана'}</p>
               </div>
               
               {/* <div>
@@ -221,22 +227,35 @@ const ProfilePage: React.FC = () => {
             </div>
           </div>
 
-          {/* Статус членства (сценарий 2.5) */}
+          {/* Статус членства (сценарий 2.2) */}
           <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
             <h2 className="text-xl font-semibold text-gray-800 mb-4">Статус членства</h2>
             
-            <div className="space-y-3">
-              <div className="flex items-center">
-                <span className="px-2 py-1 text-xs font-semibold rounded bg-green-100 text-green-800">Действующий</span>
-                <span className="ml-2 text-sm text-gray-600">Действует до 31 декабря 2025</span>
+            {membershipStatus === 'active' && (
+              <div className="space-y-3">
+                <div className="flex items-center">
+                  <span className="px-2 py-1 text-xs font-semibold rounded bg-green-100 text-green-800">🟢 Активно</span>
+                  <span className="ml-2 text-sm text-gray-600">
+                    Действует до {user?.membership_exp ? new Date(user.membership_exp).toLocaleDateString('ru-RU') : 'не определено'}
+                  </span>
+                </div>
+                <p className="text-sm text-gray-600">
+                  Осталось: <span className="font-medium">{daysUntilExpiry} дней</span>
+                </p>
               </div>
-              
-              <p className="text-sm text-gray-600">
-                Осталось: <span className="font-medium">120 дней</span>
-              </p>
-              
-              {/* Кнопка "Продлить членство" появляется за 90 дней до окончания */}
-              {/* {membershipStatus === 'expiring' && daysUntilExpiry !== null && daysUntilExpiry <= 90 && (
+            )}
+            
+            {membershipStatus === 'expiring' && daysUntilExpiry !== null && (
+              <div className="space-y-3">
+                <div className="flex items-center">
+                  <span className="px-2 py-1 text-xs font-semibold rounded bg-yellow-100 text-yellow-800">🟡 Истекает</span>
+                  <span className="ml-2 text-sm text-gray-600">
+                    Заканчивается {user?.membership_exp ? new Date(user.membership_exp).toLocaleDateString('ru-RU') : 'не определено'}
+                  </span>
+                </div>
+                <p className="text-sm text-gray-600">
+                  Осталось: <span className="font-medium">{daysUntilExpiry} дней</span>
+                </p>
                 <a
                   href="mailto:members@sro-noso.ru?subject=Продление+членства"
                   target="_blank"
@@ -245,8 +264,34 @@ const ProfilePage: React.FC = () => {
                 >
                   Продлить членство
                 </a>
-              )} */}
-            </div>
+              </div>
+            )}
+            
+            {membershipStatus === 'expired' && (
+              <div className="space-y-3">
+                <div className="flex items-center">
+                  <span className="px-2 py-1 text-xs font-semibold rounded bg-red-100 text-red-800">🔴 Истекло</span>
+                  <span className="ml-2 text-sm text-gray-600">
+                    Дата окончания: {user?.membership_exp ? new Date(user.membership_exp).toLocaleDateString('ru-RU') : 'не определено'}
+                  </span>
+                </div>
+                <p className="text-sm text-gray-600">
+                  Для продолжения работы необходимо продлить членство
+                </p>
+              </div>
+            )}
+            
+            {membershipStatus === 'excluded' && (
+              <div className="space-y-3">
+                <div className="flex items-center">
+                  <span className="px-2 py-1 text-xs font-semibold rounded bg-red-100 text-red-800">🔴 Приостановлено</span>
+                  <span className="ml-2 text-sm text-gray-600">&nbsp;</span>
+                </div>
+                <p className="text-sm text-gray-600">
+                  Членство приостановлено. Обратитесь в СРО для восстановления.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       )}
