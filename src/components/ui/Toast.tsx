@@ -16,8 +16,10 @@ export interface Toast {
 
 // Props для компонента Toast
 interface ToastProps {
-  toast: Toast;
-  onDismiss: (id: string) => void; // Функция для закрытия конкретного toast
+  message: string;
+  type: 'success' | 'error' | 'warning' | 'info';
+  onClose: () => void;
+  duration?: number;
 }
 
 // Props для контекста и провайдера
@@ -77,7 +79,7 @@ export const useToast = () => {
 };
 
 // Компонент отдельного уведомления
-const ToastItem: React.FC<ToastProps> = ({ toast, onDismiss }) => {
+const Toast: React.FC<ToastProps> = ({ message, type, onClose, duration = 5000 }) => {
   const [isVisible, setIsVisible] = useState(true);
   const [isLeaving, setIsLeaving] = useState(false);
 
@@ -85,10 +87,9 @@ const ToastItem: React.FC<ToastProps> = ({ toast, onDismiss }) => {
   useEffect(() => {
     const timer = setTimeout(() => {
       handleClose();
-    }, toast.duration || 5000); // По умолчанию 5 секунд
-
+    }, duration);
     return () => clearTimeout(timer);
-  }, [toast.duration]);
+  }, [duration]);
 
   // Анимация закрытия
   const handleClose = () => {
@@ -96,7 +97,7 @@ const ToastItem: React.FC<ToastProps> = ({ toast, onDismiss }) => {
     // Задержка для завершения анимации
     setTimeout(() => {
       setIsVisible(false);
-      onDismiss(toast.id);
+      onClose();
     }, 300); // Должна совпадать с длительностью transition в CSS
   };
 
@@ -136,18 +137,17 @@ const ToastItem: React.FC<ToastProps> = ({ toast, onDismiss }) => {
   return (
     <div
       className={`relative mb-2 p-4 rounded-md border shadow-lg flex items-start transition-all duration-300 ease-in-out ${
-        typeStyles[toast.type]
+        typeStyles[type]
       } ${isLeaving ? 'opacity-0 translate-x-full' : 'opacity-100 translate-x-0'}`}
       role="alert"
       aria-live="assertive"
       aria-atomic="true"
     >
       <div className="flex-shrink-0 mr-3">
-        {typeIcons[toast.type]}
+        {typeIcons[type]}
       </div>
       <div className="flex-1">
-        {toast.title && <div className="font-bold">{toast.title}</div>}
-        <div className="text-sm">{toast.description}</div>
+        <div className="text-sm">{message}</div>
       </div>
       <button
         onClick={handleClose}
@@ -159,6 +159,23 @@ const ToastItem: React.FC<ToastProps> = ({ toast, onDismiss }) => {
         </svg>
       </button>
     </div>
+  );
+};
+
+// Компонент отдельного уведомления для использования с контекстом
+interface ToastItemProps {
+  toast: Toast;
+  onDismiss: (id: string) => void;
+}
+
+const ToastItem: React.FC<ToastItemProps> = ({ toast, onDismiss }) => {
+  return (
+    <Toast
+      message={toast.title ? `${toast.title}: ${toast.description}` : toast.description}
+      type={toast.type}
+      onClose={() => onDismiss(toast.id)}
+      duration={toast.duration}
+    />
   );
 };
 
@@ -179,4 +196,5 @@ const ToastContainer: React.FC = () => {
   );
 };
 
-export default ToastItem; // Экспортируем ToastItem, хотя основное использование будет через контекст
+export default Toast;
+

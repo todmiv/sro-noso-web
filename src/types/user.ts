@@ -10,8 +10,11 @@
  * Роли пользователя в системе.
  * Определяет уровень доступа и доступные функции.
  */
-export type UserRole = 'guest' | 'member' | 'admin'; // Используем строковые литералы вместо enum
-
+export enum UserRole {
+  Guest = 'guest',
+  Member = 'member',
+  Admin = 'admin'
+}
 /**
  * Статус членства в СРО.
  * Отображается в профиле пользователя.
@@ -27,28 +30,30 @@ export enum MembershipStatus {
 }
 
 /**
+ * Базовый интерфейс пользователя.
+ */
+export interface User {
+  id: string;
+  inn: string;
+  full_name: string | null;
+  role: UserRole;
+  membership_status: string | null;
+  membership_exp: string | null;
+  created_at: string | null;
+  recovery_email?: string | null;
+  updated_at?: string;
+}
+
+/**
  * Интерфейс, представляющий профиль пользователя.
  * Соответствует структуре таблицы `users` в Supabase.
  */
-export interface UserProfile {
-  /** Уникальный идентификатор пользователя (UUID) */
-  id: string;
-  /** ИНН пользователя (уникальный, обязательный) */
-  inn: string;
-  /** Полное имя или название организации */
-  full_name: string | null;
-  /** Роль пользователя в системе */
-  role: UserRole;
-  /** Дата окончания членства в СРО (timestamptz) */
-  membership_exp: string | null; // Используем string для дат в формате ISO
-  /** Email для восстановления (опционально) */
+export interface UserProfile extends User {
+  /** Email для восстановления (обязательное поле) */
   recovery_email: string | null;
-  /** Дата создания записи */
-  created_at: string; // Используем string для дат в формате ISO
-  /** Дата последнего обновления записи */
-  updated_at: string; // Используем string для дат в формате ISO
+  /** Дата последнего обновления записи (обязательное поле) */
+  updated_at: string;
 }
-
 /**
  * Тип для данных, возвращаемых после успешной аутентификации.
  * Включает профиль пользователя и информацию о сессии.
@@ -69,7 +74,6 @@ export interface LoginCredentials {
   /** ИНН пользователя (10 или 12 цифр) */
   inn: string;
 }
-
 /**
  * Тип для ответа от Edge Function `/verify-inn`.
  * Представляет данные из официального реестра СРО.
@@ -103,3 +107,4 @@ export interface MembershipInfo {
   /** Цвет, ассоциированный со статусом (из констант) */
   color: string;
 }
+

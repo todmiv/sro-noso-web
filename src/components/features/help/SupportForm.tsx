@@ -16,7 +16,11 @@ import Toast from '../../ui/Toast';
  * Использует supportService для отправки данных.
  */
 
-const SupportForm: React.FC = () => {
+interface SupportFormProps {
+  onSubmitSuccess?: () => void;
+}
+
+const SupportForm: React.FC<SupportFormProps> = ({ onSubmitSuccess }) => {
   const { user } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -92,6 +96,7 @@ const SupportForm: React.FC = () => {
     }
 
     setIsSubmitting(true);
+
     try {
       const submissionData: SupportFormSubmission = {
         email: email || undefined,
@@ -103,9 +108,10 @@ const SupportForm: React.FC = () => {
 
       const response = await submitSupportTicket(submissionData);
 
-      if (response.success) {
+      if (response) {  // Просто проверяем на существование ответа
+        setToastMessage('Обращение успешно отправлено!');
+        setToastType('success');
         setSubmitSuccess(true);
-        showToastMessage('Спасибо! Ваше обращение отправлено. Мы ответим в течение 1 рабочего дня.', 'success');
         // Сброс формы
         setMessage('');
         setScreenshot(null);
@@ -113,14 +119,14 @@ const SupportForm: React.FC = () => {
           fileInputRef.current.value = ''; // Сбросить input файла
         }
         // Email и тема остаются для удобства пользователя
-      } else {
-        throw new Error(response.message || 'Не удалось отправить обращение.');
+        onSubmitSuccess?.();
       }
-    } catch (err: any) {
-      console.error('Error submitting support ticket:', err);
-      const errorMessage = err.message || 'Произошла ошибка при отправке обращения. Пожалуйста, попробуйте позже.';
+    } catch (error) {
+      console.error('Error submitting support ticket:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Не удалось отправить обращение.';
+      setToastMessage(errorMessage);
+      setToastType('error');
       setSubmitError(errorMessage);
-      showToastMessage(errorMessage, 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -336,3 +342,4 @@ const SupportForm: React.FC = () => {
 };
 
 export default SupportForm;
+

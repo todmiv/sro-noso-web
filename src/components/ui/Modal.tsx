@@ -80,7 +80,7 @@ const Modal: React.FC<ModalProps> = ({
         onClick={(e) => e.stopPropagation()} // Останавливаем всплытие клика внутри модального окна
       >
         {/* Шапка модального окна с заголовком и кнопкой закрытия */}
-        {(title || onClose) && (
+        {(!!title || !!onClose) && (
           <div className="flex items-center justify-between p-4 border-b border-gray-200">
             {title && (
               <h3 id="modal-title" className="text-lg font-semibold text-gray-800">

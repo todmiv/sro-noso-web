@@ -23,19 +23,45 @@ function isAttemptAllowed(inn: string): boolean {
     return attempts.length < MAX_ATTEMPTS;
 }
 
-function checkFailedAttempts(inn: string): number {
-    const key = `${FAILED_ATTEMPTS_KEY_PREFIX}${inn}`;
-    const now = Date.now();
-    const attempts = getItemFromStorage<{ timestamp: number }[]>(key, []);
-    return attempts.filter(attempt => now - attempt.timestamp < ATTEMPT_WINDOW_MS).length;
+export const getCurrentUser = async (): Promise<UserProfile | null> => {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+
+    if (!session?.user) return null;
+            const { data, error } = await supabase
+                .from('users')
+      .select('*')
+                .eq('id', session.user.id)
+                .single();
+            
+    if (error) {
+      console.error('Error fetching current user:', error);
+      return null;
+    }
+
+    if (data) {
+      // Добавляем недостающие поля
+      const userData: UserProfile = {
+        ...data,
+        recovery_email: data.recovery_email || null,
+        updated_at: data.updated_at || new Date().toISOString()
+        };
+      return userData;
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Error in getCurrentUser:', error);
+    return null;
 }
+};
 
 export async function login(credentials: LoginCredentials): Promise<AuthData> {
     const { inn } = credentials;
 
     if (!isValidINN(inn)) {
         throw new Error('Некорректный ИНН');
-    }
+}
 
     if (!isAttemptAllowed(inn)) {
         throw new Error('Превышен лимит попыток входа');
@@ -73,7 +99,7 @@ export async function login(credentials: LoginCredentials): Promise<AuthData> {
                 .eq('id', session.user.id)
                 .select()
                 .single();
-            
+
             if (error) throw error;
             userData = data;
         } else {
@@ -88,7 +114,7 @@ export async function login(credentials: LoginCredentials): Promise<AuthData> {
                 })
                 .select()
                 .single();
-            
+
             if (error) throw error;
             userData = data;
         }
@@ -112,3 +138,4 @@ export async function login(credentials: LoginCredentials): Promise<AuthData> {
 export async function logout(): Promise<void> {
     await supabase.auth.signOut();
 }
+

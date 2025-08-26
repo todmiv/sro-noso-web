@@ -1,28 +1,27 @@
-// src/components/features/chat/ChatInput.tsx
-
-import React, { useState, useRef, useEffect } from 'react';
-// import Button from '../../ui/Button'; // Можно использовать, если нужно
-// import { ArrowUpIcon } from '@heroicons/react/20/solid'; // Если используем иконки
-
-// Определяем типы пропсов
+import React, { useRef, useEffect } from 'react';
 interface ChatInputProps {
-  onSubmit: (message: string) => void; // Callback при отправке сообщения
-  isLoading: boolean; // Состояние загрузки (ожидание ответа)
-  placeholder?: string; // Плейсхолдер для поля ввода
-  maxRows?: number; // Максимальное количество строк при авто-расширении (по умолчанию 5)
-  maxLength?: number; // Максимальная длина ввода (по умолчанию 500 для гостей, 2000 для членов)
-  disabled?: boolean; // Флаг для отключения поля ввода
+  inputValue: string;
+  onInputChange: (value: string) => void;
+  onSend: () => void;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+  disabled?: boolean;
+  isLoading?: boolean;
+  placeholder?: string;
+  maxRows?: number;
+  maxLength?: number;
 }
 
 const ChatInput: React.FC<ChatInputProps> = ({
-  onSubmit,
-  isLoading,
-  placeholder = "Введите ваш вопрос...",
-  maxRows = 5,
-  maxLength = 500, // Значение по умолчанию, может быть изменено родителем
+    inputValue, 
+    onInputChange, 
+  onSend,
+    onKeyDown, 
   disabled = false,
+  isLoading = false,
+    placeholder = "Введите ваш вопрос...", 
+    maxRows = 5, 
+  maxLength = 500
 }) => {
-  const [inputValue, setInputValue] = useState<string>('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Автоматический ресайз textarea
@@ -42,7 +41,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
     const value = e.target.value;
     // Проверяем максимальную длину
     if (value.length <= maxLength) {
-      setInputValue(value);
+      onInputChange(value);
     }
   };
 
@@ -51,8 +50,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
     e.preventDefault();
     const trimmedValue = inputValue.trim();
     if (trimmedValue && !isLoading && !disabled) {
-      onSubmit(trimmedValue);
-      setInputValue(''); // Очищаем поле после отправки
+      onSend();
     }
   };
 
@@ -62,17 +60,15 @@ const ChatInput: React.FC<ChatInputProps> = ({
       e.preventDefault(); // Предотвращаем добавление новой строки
       handleSubmit(e);
     }
+    if (onKeyDown) {
+      onKeyDown(e);
+    }
   };
 
   // Эффект для ресайза при изменении значения
   useEffect(() => {
     resizeTextarea();
   }, [inputValue, maxRows]);
-
-  // Эффект для фокусировки на textarea при монтировании (опционально)
-  // useEffect(() => {
-  //   textareaRef.current?.focus();
-  // }, []);
 
   return (
     <form onSubmit={handleSubmit} className="flex items-end gap-2 p-2 border-t border-gray-200">
@@ -83,22 +79,16 @@ const ChatInput: React.FC<ChatInputProps> = ({
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          disabled={isLoading || disabled}
+          disabled={disabled}
           rows={1} // Начинаем с 1 строки
           maxLength={maxLength} // Устанавливаем атрибут maxLength для браузера
           className="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-primary focus:border-primary resize-none"
           aria-label="Введите ваш вопрос для ИИ-консультанта"
         />
-        {/* Индикатор количества символов (опционально) */}
-        {/* {maxLength && (
-          <div className="absolute bottom-1 right-2 text-xs text-gray-500">
-            {inputValue.length}/{maxLength}
           </div>
-        )} */}
-      </div>
       <button
         type="submit"
-        disabled={!inputValue.trim() || isLoading || disabled}
+        disabled={!inputValue.trim() || disabled}
         className={`p-3 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 ${
           !inputValue.trim() || isLoading || disabled
             ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
@@ -122,3 +112,4 @@ const ChatInput: React.FC<ChatInputProps> = ({
 };
 
 export default ChatInput;
+

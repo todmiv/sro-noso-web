@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { ChatHistoryItem } from '../types/chat';
+import { ChatHistoryItem, ChatRole } from '../types/chat';
 import * as chatService from '../services/chatService';
 
 const useChat = () => {
@@ -8,6 +8,7 @@ const useChat = () => {
   const [messages, setMessages] = useState<ChatHistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isLimitExceeded, setIsLimitExceeded] = useState(false);
   
   // Load chat history
   useEffect(() => {
@@ -26,17 +27,27 @@ const useChat = () => {
     loadChatHistory();
   }, []);
 
+  const clearError = () => setError(null);
+
   // Send message
   const sendMessage = async (content: string) => {
-    if (!content.trim()) return;
+    if (!content.trim() || isLoading || isLimitExceeded) return;
     
     setIsLoading(true);
     setError(null);
     
     try {
+      // Check limits before sending
+      const canAsk = await chatService.checkCanAskQuestion();
+      if (!canAsk) {
+        setIsLimitExceeded(true);
+        setError('Превышен лимит вопросов');
+        return;
+      }
+      
       const newMessage: ChatHistoryItem = {
-        id: `msg-${Date.now()}`,
-        role: 'user',
+        id: Date.now().toString(),
+        role: ChatRole.USER,
         content,
         timestamp: new Date().toISOString()
       };
@@ -45,16 +56,22 @@ const useChat = () => {
       setMessages(prev => [...prev, newMessage]);
       
       // Get AI response
-      const aiResponse = await chatService.askAI({ content }, user?.role || 'guest');
+      const aiResponse = await chatService.askAI({ content }, user?.role as 'guest' | 'member');
       
       const aiMessage: ChatHistoryItem = {
-        id: `msg-${Date.now() + 1}`,
-        role: 'assistant',
+        id: (Date.now() + 1).toString(),
+        role: ChatRole.ASSISTANT,
         content: aiResponse.answer,
         timestamp: new Date().toISOString()
       };
       
+      // Add AI response to chat history
       setMessages(prev => [...prev, aiMessage]);
+      
+      // Reset limit flag if user is member
+      if (isLimitExceeded && user?.role === 'member') {
+        setIsLimitExceeded(false);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ошибка отправки сообщения');
     } finally {
@@ -66,8 +83,12 @@ const useChat = () => {
     messages,
     isLoading,
     error,
-    sendMessage
+    sendMessage,
+    clearError,
+    isLimitExceeded,
+    maxQuestionLength: user?.role === 'guest' ? 500 : 2000
   };
 };
 
 export default useChat;
+

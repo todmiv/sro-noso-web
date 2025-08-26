@@ -12,9 +12,11 @@
  */
 export enum ChatRole {
   /** Сообщение от пользователя */
-  User = 'user',
+  USER = 'user',
   /** Сообщение от ассистента (ИИ) */
-  Assistant = 'assistant',
+  ASSISTANT = 'assistant',
+  /** Системное сообщение */
+  SYSTEM = 'system',
 }
 
 /**
@@ -43,12 +45,14 @@ export interface ChatSession {
 export interface ChatMessage {
   /** Уникальный идентификатор сообщения (UUID) */
   id: string;
-  /** Идентификатор сессии (FK на chat_sessions.id) */
-  session_id: string;
-  /** Роль автора сообщения */
-  role: ChatRole;
   /** Текст сообщения */
   content: string;
+  /** Роль автора сообщения */
+  role: ChatRole;
+  /** Идентификатор сессии (FK на chat_sessions.id) */
+  session_id: string;
+  /** Идентификатор пользователя */
+  user_id: string | null;
   /** Дата создания сообщения */
   created_at: string; // Используем string для дат в формате ISO
 }
@@ -66,7 +70,6 @@ export interface GuestChatMessage {
   /** Дата создания сообщения (timestamp) */
   timestamp: number; // Используем number для удобства хранения в localStorage
 }
-
 /**
  * Тип для запроса к Edge Function `/ask`.
  */
@@ -80,7 +83,6 @@ export interface AskAIRequest {
   /** История сообщений (опционально, для контекста) */
   history?: (ChatMessage | GuestChatMessage)[];
 }
-
 /**
  * Тип для ответа от Edge Function `/ask`.
  */
@@ -96,12 +98,20 @@ export interface AskAIResponse {
   /** Сообщение об ошибке, если запрос не удался */
   message?: string;
 }
-
 /**
  * Тип для элемента истории чата, отображаемого в UI.
  * Может быть сообщением из БД или из localStorage гостя.
  */
-export type ChatHistoryItem = ChatMessage | GuestChatMessage;
+export interface ChatHistoryItem {
+  /** Уникальный идентификатор элемента */
+  id: string;
+  /** Текст сообщения */
+  content: string;
+  /** Роль автора сообщения */
+  role: ChatRole;
+  /** Время создания */
+  timestamp: string;
+}
 
 /**
  * Тип для параметров, влияющих на лимиты ИИ.
@@ -114,3 +124,4 @@ export interface AILimits {
   /** Максимальное количество запросов в день (null для неограниченных) */
   dailyLimit: number | null;
 }
+

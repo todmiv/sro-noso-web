@@ -23,7 +23,10 @@ const useAuth = (): AuthContextType => {
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
-  return context;
+  if (!context) {
+      throw new Error('useAuth must be used within an AuthProvider');
+    }
+    return context;
 };
 
 export default useAuth;

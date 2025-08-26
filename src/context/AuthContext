@@ -1,0 +1,65 @@
+// ... existing imports ...
+
+const authReducer = (state: AuthState, action: AuthAction): AuthState => {
+  switch (action.type) {
+    case 'SET_USER': 
+      return {
+        ...state, 
+        user: action.payload, 
+        role: action.payload.role as UserRole || UserRole.Guest,  // Приведение типа с fallback
+        isAuthenticated: true
+      };
+    // ... rest of reducer
+  }
+};
+
+// ... existing code ...
+
+const initializeAuthState = async () => {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (session?.user) {
+      const { data: userData, error: fetchUserError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', session.user.id)
+        .single();
+
+      if (fetchUserError) {
+        console.error('Error fetching user data:', fetchUserError);
+        dispatch({ type: 'LOGOUT' });
+        return;
+      }
+
+      if (userData) {
+        const userProfile: UserProfile = {
+          id: userData.id,
+          inn: userData.inn,
+          full_name: userData.full_name,
+          role: userData.role as UserRole || UserRole.Guest,
+          membership_exp: userData.membership_exp,
+          membership_status: userData.membership_status,  // Добавлено
+          recovery_email: userData.recovery_email || null,  // Добавлено
+          created_at: userData.created_at || new Date().toISOString(),
+          updated_at: userData.updated_at || new Date().toISOString()  // Добавлено
+        };
+
+        const authData: AuthData = {
+          user: userProfile,
+          accessToken: session.access_token || null,
+          refreshToken: session.refresh_token || null,
+        };
+        dispatch({ type: 'LOGIN_SUCCESS', payload: authData });
+      }
+    }
+  } catch (err: any) {
+    console.error('Unexpected error during auth init:', err);
+    dispatch({ type: 'SET_ERROR', payload: 'Произошла непредвиденная ошибка при инициализации.' });
+  }
+};
+
+// Исправление authListener
+const authListener = supabase.auth.onAuthStateChange(async (event) => {  // Убрали неиспользуемый session
+  // ... existing listener code
+});

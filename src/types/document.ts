@@ -17,10 +17,10 @@ export interface Document {
   title: string;
   /** Путь к файлу в хранилище Supabase Storage */
   file_path: string;
-  /** Размер файла в байтах */
-  file_size: number | null;
   /** MIME-тип файла (например, application/pdf, application/vnd.openxmlformats-officedocument.wordprocessingml.document) */
   mime_type: string | null;
+  /** Размер файла в байтах */
+  file_size: number | null;
   /** Флаг, указывающий, является ли документ общедоступным */
   is_public: boolean;
   /** Дата создания записи */
@@ -32,7 +32,7 @@ export interface Document {
 /**
  * Тип для параметров сортировки документов.
  */
-export type DocumentSortOption = 'newest' | 'oldest';
+                                                 export type DocumentSortOption = 'newest' | 'oldest' | 'title';
 
 /**
  * Тип для результата запроса списка документов.
@@ -41,24 +41,23 @@ export type DocumentSortOption = 'newest' | 'oldest';
 export interface DocumentListResponse {
   /** Массив документов */
   data: Document[];
-  /** Общее количество документов, соответствующих критериям поиска (для пагинации) */
-  count: number | null;
   /** Флаг, указывающий, есть ли еще данные для загрузки */
-  hasNextPage: boolean;
+  hasMore: boolean;
 }
 
 /**
  * Тип для параметров запроса списка документов.
  */
 export interface DocumentQueryParams {
-  /** Поисковый запрос по названию */
-  searchQuery?: string;
+  /** Смещение (offset) для пагинации */
+  offset?: number;
+  /** Количество документов на страницу (лимит) */
+  limit?: number;
   /** Параметр сортировки */
   sortBy: DocumentSortOption;
-  /** Количество документов на страницу (лимит) */
-  limit: number;
-  /** Смещение (offset) для пагинации */
-  offset: number;
-  /** Флаг, указывающий, запрашивать только публичные документы (для гостей) */
-  isPublicOnly?: boolean;
+  /** Поисковый запрос по названию */
+  searchQuery?: string;
+  /** Направление сортировки */
+  sortDirection?: 'asc' | 'desc';
 }
+

@@ -1,173 +1,123 @@
-// src/hooks/useDocuments.ts
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useAuth } from '../context/AuthContext'; // Для определения роли пользователя (гость/член)
+import { useState, useEffect, useCallback } from 'react';
 import { getDocuments } from '../services/documentService';
-import { Document, DocumentListResponse, DocumentQueryParams, DocumentSortOption } from '../types/document';
+import { Document } from '../types/document';
 
-/**
- * Пользовательский хук для управления состоянием каталога документов.
- *
- * Обрабатывает загрузку, пагинацию, поиск и сортировку документов.
- * Использует documentService для взаимодействия с API.
- */
+const ITEMS_PER_PAGE = 10;
 
-// --- Типы для состояния хука ---
-interface UseDocumentsState {
-  /** Массив документов для отображения */
-  documents: Document[];
-  /** Флаг, указывающий, идет ли загрузка данных */
-  loading: boolean;
-  /** Сообщение об ошибке, если она произошла */
-  error: string | null;
-  /** Флаг, указывающий, есть ли еще документы для загрузки (для пагинации) */
-  hasNextPage: boolean;
-  /** Общее количество документов, соответствующих критериям поиска */
-  totalCount: number | null;
+interface DocumentFilters {
+  searchQuery?: string;
+  sortBy?: 'date' | 'title'; // Соответствует DocumentSortOption
+  sortDirection?: 'asc' | 'desc';
 }
 
-// --- Типы для параметров хука ---
-interface UseDocumentsProps {
-  /** Количество документов, загружаемых за один раз (лимит для пагинации) */
-  pageSize?: number;
-}
-
-/**
- * Хук для управления логикой каталога документов.
- *
- * @param props - Параметры хука.
- * @returns Объект состояния и методы управления.
- */
-const useDocuments = ({ pageSize = 20 }: UseDocumentsProps = {}): UseDocumentsState & {
-  /** Функция для загрузки следующей страницы документов */
-  loadMore: () => void;
-  /** Функция для повторной попытки загрузки */
-  retry: () => void;
-  /** Функция для установки поискового запроса */
-  setSearchQuery: (query: string) => void;
-  /** Функция для установки параметра сортировки */
-  setSortBy: (sort: DocumentSortOption) => void;
-  /** Текущий поисковый запрос */
-  searchQuery: string;
-  /** Текущий параметр сортировки */
-  sortBy: DocumentSortOption;
-} => {
-  // Получаем роль пользователя из контекста аутентификации
-  const { role } = useAuth();
-
-  // Состояние хука
+const useDocuments = () => {
   const [documents, setDocuments] = useState<Document[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-  const [hasNextPage, setHasNextPage] = useState<boolean>(true);
-  const [totalCount, setTotalCount] = useState<number | null>(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+  const [filters, setFilters] = useState<DocumentFilters>({
+    sortBy: 'date' // Значение по умолчанию
+  });
 
-  // Параметры запроса
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [sortBy, setSortBy] = useState<DocumentSortOption>('newest');
-  const [offset, setOffset] = useState<number>(0); // Для пагинации
-
-  // --- Функции для управления состоянием ---
-
-  /**
-   * Загружает документы с текущими параметрами.
-   * @param append - Если true, добавляет документы к существующему списку (для пагинации).
-   */
-  const loadDocuments = useCallback(async (append: boolean = false) => {
-    if (!append) {
-      // Если это новая загрузка (не "Показать ещё"), сбрасываем состояние
-      setLoading(true);
-      setError(null);
-      setDocuments([]);
-      setOffset(0);
-      setHasNextPage(true);
-      setTotalCount(null);
-    }
-
-    try {
-      const params: DocumentQueryParams = {
-        searchQuery: searchQuery || undefined, // Передаем undefined, если пустая строка
-        sortBy,
-        limit: pageSize,
-        offset: append ? offset : 0, // Если добавляем, используем текущий offset
-        // Гости видят только публичные документы
-        isPublicOnly: role === 'guest',
-      };
-
-      const response: DocumentListResponse = await getDocuments(params);
-
-      setTotalCount(response.count);
-
-      if (append) {
-        // Добавляем новые документы к существующему списку
-        setDocuments(prevDocs => [...prevDocs, ...response.documents]);
-        // Обновляем offset для следующей страницы
-        setOffset(prevOffset => prevOffset + pageSize);
-      } else {
-        // Заменяем список документов
-        setDocuments(response.documents);
-        // Устанавливаем offset для следующей страницы
-        setOffset(pageSize);
-      }
-
-      // Обновляем флаг наличия следующей страницы
-      setHasNextPage(response.hasNextPage);
-
-    } catch (err: any) {
-      console.error('Error in useDocuments loadDocuments:', err);
-      setError(err.message || 'Произошла ошибка при загрузке документов.');
-      if (!append) {
-        // При ошибке новой загрузки очищаем список
-        setDocuments([]);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [searchQuery, sortBy, pageSize, offset, role]); // Зависимости useCallback
-
-  /**
-   * Загружает следующую страницу документов.
-   */
-  const loadMore = useCallback(() => {
-    if (loading || !hasNextPage) return; // Не загружаем, если уже загружается или нет следующей страницы
-    loadDocuments(true); // Загружаем с append = true
-  }, [loading, hasNextPage, loadDocuments]);
-
-  /**
-   * Повторяет последнюю попытку загрузки.
-   */
-  const retry = useCallback(() => {
-    // Сбрасываем offset, чтобы перезагрузить с начала
-    // Это может быть не всегда желаемое поведение, но упрощает логику
-    // Альтернатива: хранить последний успешный offset
-    loadDocuments(false); // Загружаем с append = false
-  }, [loadDocuments]);
-
-  // --- Эффекты ---
-
-  // Эффект для загрузки документов при изменении ключевых параметров
-  // (searchQuery, sortBy, role) - это приведет к "новой" загрузке, а не добавлению
   useEffect(() => {
-    loadDocuments(false);
-  }, [searchQuery, sortBy, role, loadDocuments]); // Добавлен role в зависимости
+    const fetchInitialDocuments = async () => {
+      setIsLoading(true);
+      try {
+        const response = await getDocuments({
+          offset: 0,
+          limit: ITEMS_PER_PAGE,
+          sortBy: filters.sortBy || 'date'
+        });
 
-  // --- Возвращаемое значение ---
+        setDocuments(response.data);
+        setHasMore(response.data.length === ITEMS_PER_PAGE);
+        setError(null);
+      } catch (err) {
+        console.error('Error fetching documents:', err);
+        setError(err instanceof Error ? err : new Error('Failed to fetch documents'));
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchInitialDocuments();
+  }, [filters.sortBy]);
+  const loadMore = useCallback(async () => {
+    if (!hasMore || isLoading) return;
+
+    setIsLoading(true);
+    try {
+      const response = await getDocuments({
+        offset: documents.length,
+        limit: ITEMS_PER_PAGE,
+        sortBy: filters.sortBy || 'date',
+        searchQuery: filters.searchQuery,
+        sortDirection: filters.sortDirection
+      });
+
+      if (response.data.length > 0) {
+        setDocuments(prevDocs => [...prevDocs, ...response.data]);
+        setHasMore(response.data.length === ITEMS_PER_PAGE);
+      } else {
+        setHasMore(false);
+      }
+      setError(null);
+    } catch (err) {
+      console.error('Error loading more documents:', err);
+      setError(err instanceof Error ? err : new Error('Failed to load more documents'));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [documents.length, filters, hasMore, isLoading]);
+
+  const search = useCallback(async (newFilters: DocumentFilters) => {
+    setIsLoading(true);
+    try {
+      const response = await getDocuments({
+        offset: 0,
+        limit: ITEMS_PER_PAGE,
+        sortBy: newFilters.sortBy || 'date',
+        searchQuery: newFilters.searchQuery,
+        sortDirection: newFilters.sortDirection
+      });
+
+      setDocuments(response.data);
+      setHasMore(response.data.length === ITEMS_PER_PAGE);
+      setFilters(newFilters);
+      setError(null);
+    } catch (err) {
+      console.error('Error searching documents:', err);
+      setError(err instanceof Error ? err : new Error('Failed to search documents'));
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Адаптеры для использования в компонентах
+  const setSearchQuery = useCallback((query: string) => {
+    search({ ...filters, searchQuery: query });
+  }, [filters, search]);
+
+  const setSortBy = useCallback((sortOption: 'date' | 'title') => {
+    search({ ...filters, sortBy: sortOption });
+  }, [filters, search]);
 
   return {
-    // Состояние
     documents,
-    loading,
+    hasMore,
+    isLoading,
     error,
-    hasNextPage,
-    totalCount,
-    // Методы управления
     loadMore,
-    retry,
+    search,
     setSearchQuery,
     setSortBy,
-    // Текущие параметры (для привязки к UI-компонентам)
-    searchQuery,
-    sortBy,
+    searchQuery: filters.searchQuery || '',
+    sortBy: filters.sortBy || 'date',
+    loading: isLoading,
+    hasNextPage: hasMore,
+    retry: () => search(filters)
   };
 };
 
 export default useDocuments;
+

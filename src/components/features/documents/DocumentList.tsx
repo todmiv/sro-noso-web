@@ -19,7 +19,7 @@ const DocumentList: React.FC = () => {
     setSortBy,
     searchQuery,
     sortBy,
-  } = useDocuments({ pageSize: 20 });
+  } = useDocuments();
 
   // Обработчик изменения поискового запроса
   const handleSearchChange = useCallback((query: string) => {
@@ -27,9 +27,9 @@ const DocumentList: React.FC = () => {
   }, [setSearchQuery]);
 
   // Обработчик изменения сортировки
-  const handleSortChange = useCallback((sort: DocumentSortOption) => {
-    setSortBy(sort);
-  }, [setSortBy]);
+  const handleSortChange = useCallback((sort: 'newest' | 'oldest' | 'title') => {
+      setSortBy(sort);
+    }, [setSortBy]);
 
   return (
     <div className="space-y-6">

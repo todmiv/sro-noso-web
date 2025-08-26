@@ -1,16 +1,8 @@
-// src/components/features/chat/ChatInterface.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import useChat from '../../../hooks/useChat';
 import Message from './Message';
 import ChatInput from './ChatInput';
-
-/**
- * Компонент основного интерфейса чата ИИ-консультанта.
- *
- * Реализует сценарий 2.4 из ТЗ: текстовый ввод, лимиты, история, обработка ошибок.
- * Использует useChat для управления состоянием и логикой.
- */
 
 const ChatInterface: React.FC = () => {
   const { role } = useAuth();
@@ -19,7 +11,8 @@ const ChatInterface: React.FC = () => {
     isLoading,
     error,
     sendMessage,
-    clearError: chatClearError,
+    clearError,
+    isLimitExceeded,
     maxQuestionLength
   } = useChat();
 
@@ -35,8 +28,9 @@ const ChatInterface: React.FC = () => {
 
   // Обработчик отправки вопроса
   const handleSend = () => {
-    if (currentQuestion.trim() && !isInputDisabled) {
-      sendQuestion(currentQuestion);
+    if (currentQuestion.trim()) {
+      sendMessage(currentQuestion);
+      setCurrentQuestion('');
     }
   };
 
@@ -75,7 +69,11 @@ const ChatInterface: React.FC = () => {
         )}
 
         {messages.map((message, index) => (
-          <Message key={index} content={message.content} sender={message.sender} />
+          <Message 
+            key={index} 
+            content={message.content} 
+            role={message.role} 
+          />
         ))}
 
         {isLoading && (
@@ -159,12 +157,11 @@ const ChatInterface: React.FC = () => {
         )}
 
         <ChatInput
-          // Updated to match the expected props
           inputValue={currentQuestion}
-          onInputChange={(value) => setCurrentQuestion(value)}
+          onInputChange={(value: string) => setCurrentQuestion(value)}
           onSend={handleSend}
           onKeyDown={handleKeyDown}
-          disabled={isLoading}
+          disabled={isLoading || isLimitExceeded}
         />
 
         <div className="mt-2 flex justify-between items-center text-xs text-gray-500">
