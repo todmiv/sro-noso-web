@@ -16,7 +16,14 @@ const useChat = () => {
       try {
         setIsLoading(true);
         const history = await chatService.getGuestChatHistory();
-        setMessages(history || []);
+        const messagesWithId = history?.map(msg => ({
+          ...msg,
+          id: msg.id || msg.timestamp?.toString() || Date.now().toString(),
+          timestamp: typeof msg.timestamp === 'number' 
+            ? new Date(msg.timestamp).toISOString() 
+            : msg.timestamp || new Date().toISOString()
+        })) || [];
+        setMessages(messagesWithId);
       } catch (err) {
         setError('Ошибка загрузки истории чата');
       } finally {
@@ -36,9 +43,15 @@ const useChat = () => {
     setIsLoading(true);
     setError(null);
     
+    if (!user?.id) {
+      setError('Пользователь не авторизован');
+      setIsLoading(false);
+      return;
+    }
+
     try {
       // Check limits before sending
-      const canAsk = await chatService.checkCanAskQuestion();
+      const canAsk = await chatService.checkCanAskQuestion(user.id);
       if (!canAsk) {
         setIsLimitExceeded(true);
         setError('Превышен лимит вопросов');
@@ -56,12 +69,14 @@ const useChat = () => {
       setMessages(prev => [...prev, newMessage]);
       
       // Get AI response
-      const aiResponse = await chatService.askAI({ content }, user?.role as 'guest' | 'member');
+      const aiResponse = await chatService.askAI({ 
+        question: content
+      });
       
       const aiMessage: ChatHistoryItem = {
         id: (Date.now() + 1).toString(),
         role: ChatRole.ASSISTANT,
-        content: aiResponse.answer,
+        content: aiResponse.content,
         timestamp: new Date().toISOString()
       };
       
@@ -91,4 +106,3 @@ const useChat = () => {
 };
 
 export default useChat;
-
