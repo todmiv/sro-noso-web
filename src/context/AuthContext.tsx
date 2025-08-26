@@ -33,7 +33,7 @@ export interface AuthContextType {
   loading: boolean;
   error: string | null;
   role: UserRole;
-  login: (inn: string) => Promise<boolean>;
+  login: (_inn: string) => Promise<boolean>;
   logout: () => Promise<void>;
   clearError: () => void;
 }
@@ -158,11 +158,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  const login = async (inn: string): Promise<boolean> => {
-    dispatch({ type: 'LOGIN_START' });
-    try {
-      // Логика логина
-      return true;
+const login = async (_inn: string): Promise<boolean> => {
+  dispatch({ type: 'LOGIN_START' });
+  try {
+    // Логика логина
+    return true;
     } catch (err: any) {
       console.error('Login error:', err);
       Sentry.captureException(err);
@@ -205,4 +205,3 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
-
