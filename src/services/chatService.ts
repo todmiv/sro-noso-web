@@ -1,5 +1,5 @@
 // src/services/chatService.ts
-import { supabase } from './supabaseClient'; // Используем глобальный клиент
+// supabase больше не используется напрямую в этом файле
 import type {
   AskAIRequest,
   // ChatHistoryItem, // Не используем напрямую для типизации .from
@@ -50,12 +50,63 @@ export async function getGuestChatHistory(): Promise<Database['public']['Tables'
  * @param {string} userId - Идентификатор пользователя.
  * @returns {Promise<boolean>} True, если можно задать вопрос, иначе false.
  */
-export async function checkCanAskQuestion(userId: string): Promise<boolean> {
-  // TODO: Реализовать логику проверки лимитов.
-  // Это может включать запрос к БД для подсчета запросов за день и сравнение с лимитом.
-  // Для MVP можно вернуть true.
-  console.warn('checkCanAskQuestion: Логика проверки лимитов не реализована.');
-  return true;
+import { supabase } from './supabaseClient';
+
+export async function checkCanAskQuestion(userId: string): Promise<{ canAsk: boolean; reason?: string }> {
+  try {
+    // Проверка лимита запросов для авторизованных пользователей
+    if (userId) {
+      const { data: limitData, error } = await supabase
+        .from('daily_limits')
+        .select('question_count')
+        .eq('user_id', userId)
+        .maybeSingle();
+      
+      if (error) {
+        console.error('Ошибка проверки лимита:', error);
+        return { canAsk: false, reason: 'Ошибка проверки лимита' };
+      }
+      
+      const currentCount = limitData?.question_count || 0;
+      const limit = 10; // Для членов СРО лимит 10 запросов в сутки
+      
+      if (currentCount >= limit) {
+        return { 
+          canAsk: false, 
+          reason: `Превышен лимит вопросов (${currentCount}/${limit})` 
+        };
+      }
+      
+      return { canAsk: true };
+    }
+    
+    // Для гостей проверяем localStorage
+    const guestLimitKey = 'guest_question_limit';
+    const lastReset = localStorage.getItem(`${guestLimitKey}_timestamp`);
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    
+    // Сброс счётчика на начало дня
+    if (!lastReset || new Date(lastReset).toISOString().split('T')[0] !== today) {
+      localStorage.setItem(guestLimitKey, '0');
+      localStorage.setItem(`${guestLimitKey}_timestamp`, now.toISOString());
+    }
+    
+    const currentCount = parseInt(localStorage.getItem(guestLimitKey) || '0');
+    const limit = 3; // Гость может задать 3 вопроса в сутки
+    
+    if (currentCount >= limit) {
+      return { 
+        canAsk: false, 
+        reason: `Превышен лимит вопросов (${currentCount}/${limit})` 
+      };
+    }
+    
+    return { canAsk: true };
+  } catch (error) {
+    console.error('Ошибка проверки лимита:', error);
+    return { canAsk: false, reason: 'Ошибка проверки лимита' };
+  }
 }
 
 /**
