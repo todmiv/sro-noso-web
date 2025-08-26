@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import { AuthData, LoginCredentials, UserProfile } from '../types/user';
+import { AuthData, LoginCredentials, UserProfile, UserRole } from '../types/user';
 import { isValidINN } from '../utils/helpers';
 import { getItemFromStorage, setItemToStorage } from '../utils/storageUtils';
 
@@ -28,28 +28,26 @@ export const getCurrentUser = async (): Promise<UserProfile | null> => {
     const { data: { session } } = await supabase.auth.getSession();
 
     if (!session?.user) return null;
-            const { data, error } = await supabase
-                .from('users')
-      .select('*')
-                .eq('id', session.user.id)
-                .single();
-            
-    if (error) {
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, inn, full_name, membership_status, membership_exp, role, created_at')
+      .eq('id', session.user.id)
+      .single();
+    
+    if (error || !data) {
       console.error('Error fetching current user:', error);
       return null;
     }
 
-    if (data) {
-      // Добавляем недостающие поля
-      const userData: UserProfile = {
-        ...data,
-        recovery_email: data.recovery_email || null,
-        updated_at: data.updated_at || new Date().toISOString()
-        };
-      return userData;
-    }
 
-    return null;
+    const userData: UserProfile = {
+      ...data,
+      recovery_email: null,
+      updated_at: data.created_at || new Date().toISOString(),
+      role: (data.role as UserRole) || 'guest'
+    };
+    
+    return userData;
   } catch (error) {
     console.error('Error in getCurrentUser:', error);
     return null;
@@ -84,7 +82,7 @@ export async function login(credentials: LoginCredentials): Promise<AuthData> {
         }
 
         // Поиск или создание пользователя
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        const { data: { session } } = await supabase.auth.getSession();
         let userData: UserProfile | null = null;
 
         if (session?.user?.id) {
@@ -101,7 +99,12 @@ export async function login(credentials: LoginCredentials): Promise<AuthData> {
                 .single();
 
             if (error) throw error;
-            userData = data;
+            userData = {
+              ...data,
+              recovery_email: null,
+              updated_at: data.created_at || new Date().toISOString(),
+              role: (data.role as UserRole) || 'guest'
+            };
         } else {
             // Создание нового пользователя
             const { data, error } = await supabase
@@ -110,7 +113,8 @@ export async function login(credentials: LoginCredentials): Promise<AuthData> {
                     inn,
                     full_name: registryData.fullName,
                     membership_status: registryData.membershipStatus,
-                    membership_exp: registryData.membershipExpirationDate
+                    membership_exp: registryData.membershipExpirationDate,
+                    role: registryData.membershipStatus === 'active' ? 'member' : 'guest'
                 })
                 .select()
                 .single();
@@ -138,4 +142,3 @@ export async function login(credentials: LoginCredentials): Promise<AuthData> {
 export async function logout(): Promise<void> {
     await supabase.auth.signOut();
 }
-
