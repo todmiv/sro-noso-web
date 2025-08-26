@@ -1,7 +1,7 @@
 // src/services/supportService.ts
 import { supabase } from './supabaseClient';
-import { SupportFormSubmission, SupportFormResponse, SupportTicket } from '../types/support';
-import { LIMITS } from '../utils/constants';
+import { SupportFormSubmission } from '../types/support';
+// import { LIMITS } from '../utils/constants';
 
 /**
  * Сервис для работы с системой обратной связи и поддержки.
@@ -9,7 +9,7 @@ import { LIMITS } from '../utils/constants';
  * В будущем может включать получение FAQ из БД.
  */
 
-const SUPPORT_TICKETS_TABLE = 'support_tickets';
+// const SUPPORT_TICKETS_TABLE = 'support_tickets';
 const SUPPORT_SCREENSHOTS_BUCKET = 'support-screenshots'; // Имя бакета для скриншотов
 
 /**
@@ -29,7 +29,7 @@ export async function submitSupportTicket(submission: SupportFormSubmission): Pr
 
         // 2. Загрузка скриншота (если он приложен)
         let screenshotUrl: string | null = null;
-        if (screenshot) {
+        if (screenshot && 'name' in screenshot) {
             // Генерируем уникальное имя файла
             const fileExtension = screenshot.name.split('.').pop();
             const fileName = `ticket_${Date.now()}_${Math.random().toString(36).substring(2, 15)}.${fileExtension}`;
