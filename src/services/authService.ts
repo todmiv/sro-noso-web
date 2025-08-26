@@ -1,14 +1,14 @@
 // src/services/authService.ts
 import { AuthData } from '../types/auth'; // AuthData может остаться в auth.ts
-import { LoginCredentials, RegistryDataResponse, UserProfile, UserRole } from '../types/user'; // Остальные из user.ts
+import { LoginCredentials, UserProfile, UserRole } from '../types/user';
+import { RegistryDataResponse } from '../types/auth';
 import { supabase } from './supabaseClient';
 import { isValidINN } from '../utils/helpers';
 import * as Sentry from '@sentry/react';
 
 // --- Константы ---
 const LOGIN_ATTEMPTS_LIMIT = 5;
-const LOGIN_ATTEMPT_WINDOW_MS = 15 * 60 * 1000; // 15 минут
-
+const LOGIN_ATTEMPT_WINDOW_MS = 10 * 60 * 1000; // 10 минут
 /**
  * Фетчер данных из реестра СРО НОСО.
  * В реальной реализации это будет вызов Edge Function.
@@ -17,55 +17,35 @@ const LOGIN_ATTEMPT_WINDOW_MS = 15 * 60 * 1000; // 15 минут
  */
 async function fetchRegistryData(inn: string): Promise<RegistryDataResponse> {
   try {
-    // === Заглушка для демонстрации ===
-    console.log(`Fetching registry data for INN: ${inn} (stub)`);
-    // Имитация задержки
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    const response = await fetch('/local_reestr.txt');
+    if (!response.ok) {
+      throw new Error('Failed to load registry file');
+    }
+    const text = await response.text();
+    const lines = text.trim().split('\n');
 
-    // Имитация успешного ответа
-    if (['7708501511', '7706107788', '7727629890'].includes(inn)) {
-      return {
-        success: true,
-        fullName: `ООО "Фирма ${inn.slice(-3)}"`,
-        membershipStatus: 'active',
-        membershipExpirationDate: '2027-12-31',
-        message: 'ИНН найден и действителен.',
-      };
+    for (const line of lines) {
+      const [status, fullName, registryInn, expDate] = line.split('\t');
+      if (registryInn?.trim() === inn.trim()) {
+        return {
+          success: true,
+          fullName: fullName.trim(),
+          membershipStatus: status.trim(),
+          membershipExpirationDate: expDate?.trim() || '',
+          message: 'ИНН найден и действителен.',
+        };
+      }
     }
 
-    // Имитация ответа "не найден"
     return {
       success: false,
-      message: 'ИНН не найден в реестре СРО НОСО. Пожалуйста, проверьте корректность введенных данных или свяжитесь с нами для уточнения.',
+      message: 'ИНН не найден в реестре СРО',
     };
-    // === Конец заглушки ===
-
-    // TODO: Заменить на реальный вызов Edge Function
-    /*
-    const { data, error } = await supabase.functions.invoke('verify-inn', {
-      body: { inn: inn },
-    });
-
-    if (error) {
-      console.error('Error calling Edge Function verify-inn:', error);
-      // Возвращаем специфичную ошибку, которую можно отличить
-      throw new Error(`Ошибка сервиса проверки ИНН: ${error.message || 'Неизвестная ошибка'}`);
-    }
-
-    // Предполагаем, что ответ от Edge Function соответствует RegistryDataResponse
-    return data as RegistryDataResponse;
-    */
-  } catch (err: any) {
-    console.error('fetchRegistryData: Ошибка при вызове сервиса:', err);
-    // Если это уже обработанная ошибка от Supabase/Edge Function, просто пробрасываем её
-    if (err.message.startsWith('Ошибка сервиса проверки ИНН:')) {
-      throw err;
-    }
-    // Если это сетевая ошибка или ошибка парсинга, возвращаем общую ошибку
-    throw new Error('Сервис проверки ИНН временно недоступен. Пожалуйста, попробуйте позже.');
+  } catch (error) {
+    console.error('fetchRegistryData error:', error);
+    throw new Error('Сервис проверки реестра временно недоступен');
   }
 }
-
 /**
  * Валидация лимитов попыток входа.
  * @param {string} inn - ИНН пользователя.
@@ -126,76 +106,102 @@ export async function login({ inn }: LoginCredentials): Promise<AuthData> {
       throw new Error(`Превышен лимит попыток входа. Повторите попытку через 15 минут.`);
     }
 
-    // 3. Вызов Edge Function для проверки ИНН в реестре СРО
-    const { registryData, error: registryError } = await fetchRegistryData(inn);
-    if (registryError || !registryData) {
-      throw new Error(registryData?.message || 'ИНН не найден');
+    // 3. Проверка ИНН в локальном реестре (local_reestr.txt)
+    const registryData = await fetchRegistryData(inn);
+    if (!registryData.success) {
+      throw new Error(registryData.message || 'ИНН не найден в реестре СРО');
     }
 
-    // 4. Получение текущей сессии Supabase Auth
+    // 4. Регистрация или вход через Supabase Auth
+    const { error: authError } = await supabase.auth.signUp({
+      email: `${inn}@noso.temp`,
+      password: inn,
+    });
+    if (authError) {
+      console.error('Auth error:', authError);
+      throw new Error('Ошибка регистрации');
+    }
+
+    // Небольшая задержка для синхронизации сессии
+    await new Promise(resolve => setTimeout(resolve, 200));
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError) {
-      console.error('Error getting session:', sessionError);
-      throw new Error('Ошибка получения сессии аутентификации.');
+    if (sessionError || !session) {
+      throw new Error('Не удалось создать сессию');
     }
 
-    // 5. Проверка, существует ли пользователь в таблице `users`
+    // 5. Проверка и обработка данных пользователя в таблице `users`
     let userData: UserProfile | null = null;
-    if (session?.user?.id) {
-      // a. Пользователь уже аутентифицирован (например, через OAuth или email)
-      // Обновляем его данные
-      const { data, error } = await supabase
+    const { data, error: fetchError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', session.user.id)
+      .maybeSingle();
+
+    if (fetchError && fetchError.code !== 'PGRST116') {
+      throw new Error('Ошибка при проверке пользователя');
+    }
+
+    if (data) {
+      // Обновление существующего пользователя
+      const { data: updateData, error: updateError } = await supabase
         .from('users')
         .update({
-          inn: inn, // Убедиться, что ИНН обновляется/сохраняется
+          inn: inn,
           full_name: registryData.fullName,
           membership_status: registryData.membershipStatus,
           membership_exp: registryData.membershipExpirationDate,
-          // role будет установлен ниже или останется существующим
-          // recovery_email и updated_at обрабатываются ниже
+          role: 'member',
         })
         .eq('id', session.user.id)
         .select()
         .single();
 
-      if (error) {
-        console.error('Error updating user:', error);
-        // Проверим, если пользователь не найден (например, запись была удалена), создаем новую
-        if (error.code === 'PGRST116') { // Код ошибки PostgREST для "Row not found"
-             console.warn('User not found during update, attempting to create...');
-             // Переходим к блоку создания
-        } else {
-             throw new Error('Не удалось обновить данные пользователя');
-        }
-      } else {
-        userData = data;
+      if (updateError) {
+        throw new Error('Не удалось обновить данные пользователя');
       }
-    }
-
-    // Если userData не была получена (новый пользователь или не найден при обновлении)
-    if (!userData && session?.user?.id) {
-      // b. Создание новой записи пользователя
-      const { data, error } = await supabase
+      
+      // Создаем валидный объект UserProfile с обработкой отсутствующих полей
+      userData = {
+        id: updateData.id,
+        inn: updateData.inn,
+        full_name: updateData.full_name,
+        role: (updateData.role as UserRole) || 'member',
+        membership_status: updateData.membership_status,
+        membership_exp: updateData.membership_exp || '',
+        recovery_email: (updateData as any)?.recovery_email ?? '',
+        created_at: updateData.created_at || new Date().toISOString(),
+        updated_at: (updateData as any)?.updated_at || new Date().toISOString()
+      };
+    } else {
+      // Создание нового пользователя
+      const { data: insertData, error: insertError } = await supabase
         .from('users')
-        .insert([
-          {
-            id: session.user.id, // ID из сессии Supabase Auth
-            inn: inn,
-            full_name: registryData.fullName,
-            membership_status: registryData.membershipStatus,
-            membership_exp: registryData.membershipExpirationDate,
-            role: 'member', // Предполагаем, что успешный вход делает пользователя членом
-            // recovery_email и updated_at будут установлены значениями по умолчанию ниже
-          },
-        ])
+        .insert({
+          id: session.user.id,
+          inn: inn,
+          full_name: registryData.fullName,
+          membership_status: registryData.membershipStatus,
+          membership_exp: registryData.membershipExpirationDate,
+          role: 'member',
+        })
         .select()
         .single();
 
-      if (error) {
-        console.error('Error creating user:', error);
+      if (insertError) {
         throw new Error('Не удалось создать пользователя');
       }
-      userData = data;
+      
+      userData = {
+        id: insertData.id,
+        inn: insertData.inn,
+        full_name: insertData.full_name,
+        role: (insertData.role as UserRole) || 'member',
+        membership_status: insertData.membership_status,
+        membership_exp: insertData.membership_exp || '',
+        recovery_email: (insertData as any)?.recovery_email ?? '',
+        created_at: insertData.created_at || new Date().toISOString(),
+        updated_at: (insertData as any)?.updated_at || new Date().toISOString()
+      };
     }
 
     // --- Исправление ошибки TS2739 ---
@@ -206,18 +212,8 @@ export async function login({ inn }: LoginCredentials): Promise<AuthData> {
          throw new Error('Не удалось получить или создать профиль пользователя.');
     }
 
-    const userProfile: UserProfile = {
-      id: userData.id,
-      inn: userData.inn,
-      full_name: userData.full_name,
-      role: (userData.role as UserRole) || UserRole.Guest, // Приведение типа и значение по умолчанию
-      membership_exp: userData.membership_exp,
-      membership_status: userData.membership_status,
-      // Обработка обязательных полей, которые могут отсутствовать или быть null в ответе БД
-      recovery_email: userData.recovery_email ?? '', // Значение по умолчанию, если null или undefined
-      created_at: userData.created_at || new Date().toISOString(), // Значение по умолчанию
-      updated_at: userData.updated_at || new Date().toISOString() // Значение по умолчанию
-    };
+    // Убираем дублирующее создание userProfile из userData
+    const userProfile = userData;
     // --- Конец исправления ---
 
     const authData: AuthData = {
