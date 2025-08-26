@@ -95,8 +95,9 @@ const ChatInterface: React.FC = () => {
             </div>
           </div>
         )}
-
-        <div ref={messagesEndRef} />
+        <div>
+          {currentQuestion.length}/{maxQuestionLength}
+        </div>
       </div>
 
       {/* Область ввода */}
@@ -167,9 +168,9 @@ const ChatInterface: React.FC = () => {
         <div className="mt-2 flex justify-between items-center text-xs text-gray-500">
           <div>
             {role === 'guest' ? (
-              <span>Гостевой режим: ограничение 3 вопроса в день.</span>
+              <span>Гостевой режим: до {maxQuestionLength} символов и 3 вопроса в день.</span>
             ) : (
-              <span>Для членов СРО ограничения на количество вопросов сняты.</span>
+              <span>Член СРО: до {maxQuestionLength} символов, ограничения на вопросы сняты.</span>
             )}
           </div>
           <div>
