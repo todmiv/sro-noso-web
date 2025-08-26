@@ -11,3 +11,11 @@ export enum UserRole {
   Guest = 'guest',
   Admin = 'admin'
 }
+
+export interface RegistryDataResponse {
+  success: boolean;
+  fullName?: string;
+  membershipStatus?: string;
+  membershipExpirationDate?: string;
+  message?: string;
+}
