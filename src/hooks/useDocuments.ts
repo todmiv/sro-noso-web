@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getDocuments } from '../services/documentService';
-import { Document } from '../types/document';
+import { Document, DocumentSortOption } from '../types/document';
 
 const ITEMS_PER_PAGE = 10;
 
 interface DocumentFilters {
   searchQuery?: string;
-  sortBy?: 'date' | 'title'; // Соответствует DocumentSortOption
+  sortBy?: DocumentSortOption;
   sortDirection?: 'asc' | 'desc';
 }
 
@@ -16,7 +16,7 @@ const useDocuments = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [filters, setFilters] = useState<DocumentFilters>({
-    sortBy: 'date' // Значение по умолчанию
+    sortBy: 'newest'
   });
 
   useEffect(() => {
@@ -26,7 +26,7 @@ const useDocuments = () => {
         const response = await getDocuments({
           offset: 0,
           limit: ITEMS_PER_PAGE,
-          sortBy: filters.sortBy || 'date'
+          sortBy: filters.sortBy || 'newest'
         });
 
         setDocuments(response.data);
@@ -42,6 +42,7 @@ const useDocuments = () => {
 
     fetchInitialDocuments();
   }, [filters.sortBy]);
+
   const loadMore = useCallback(async () => {
     if (!hasMore || isLoading) return;
 
@@ -50,7 +51,7 @@ const useDocuments = () => {
       const response = await getDocuments({
         offset: documents.length,
         limit: ITEMS_PER_PAGE,
-        sortBy: filters.sortBy || 'date',
+        sortBy: filters.sortBy || 'newest',
         searchQuery: filters.searchQuery,
         sortDirection: filters.sortDirection
       });
@@ -76,7 +77,7 @@ const useDocuments = () => {
       const response = await getDocuments({
         offset: 0,
         limit: ITEMS_PER_PAGE,
-        sortBy: newFilters.sortBy || 'date',
+        sortBy: newFilters.sortBy || 'newest',
         searchQuery: newFilters.searchQuery,
         sortDirection: newFilters.sortDirection
       });
@@ -93,13 +94,16 @@ const useDocuments = () => {
     }
   }, []);
 
-  // Адаптеры для использования в компонентах
   const setSearchQuery = useCallback((query: string) => {
     search({ ...filters, searchQuery: query });
   }, [filters, search]);
 
-  const setSortBy = useCallback((sortOption: 'date' | 'title') => {
+  const setSortBy = useCallback((sortOption: DocumentSortOption) => {
     search({ ...filters, sortBy: sortOption });
+  }, [filters, search]);
+
+  const retry = useCallback(() => {
+    search(filters);
   }, [filters, search]);
 
   return {
@@ -112,12 +116,11 @@ const useDocuments = () => {
     setSearchQuery,
     setSortBy,
     searchQuery: filters.searchQuery || '',
-    sortBy: filters.sortBy || 'date',
+    sortBy: filters.sortBy || 'newest',
     loading: isLoading,
     hasNextPage: hasMore,
-    retry: () => search(filters)
+    retry
   };
 };
 
 export default useDocuments;
-
