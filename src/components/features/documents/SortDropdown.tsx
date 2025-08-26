@@ -5,10 +5,10 @@ import React from 'react';
 
 // Определяем типы пропсов
 interface SortDropdownProps {
-  value: 'newest' | 'oldest'; // Текущее значение сортировки
-  onChange: (value: 'newest' | 'oldest') => void; // Callback при изменении значения
-  label?: string; // Опциональная метка
-  className?: string; // Дополнительные классы для стилизации
+  value: 'newest' | 'oldest' | 'title'; // Текущее значение сортировки с добавлением 'title'
+  onChange: (value: 'newest' | 'oldest' | 'title') => void; // Обновленный callback с поддержкой 'title'
+  label?: string;
+  className?: string;
 }
 
 const SortDropdown: React.FC<SortDropdownProps> = ({
@@ -17,9 +17,8 @@ const SortDropdown: React.FC<SortDropdownProps> = ({
   label = 'Сортировать по:',
   className = '',
 }) => {
-  // Обработчик изменения значения
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    onChange(e.target.value as 'newest' | 'oldest');
+    onChange(e.target.value as 'newest' | 'oldest' | 'title');
   };
 
   return (
@@ -38,11 +37,8 @@ const SortDropdown: React.FC<SortDropdownProps> = ({
         >
           <option value="newest">Сначала новые</option>
           <option value="oldest">Сначала старые</option>
+          <option value="title">По названию</option>
         </select>
-        {/* Иконка раскрывающегося списка (опционально) */}
-        {/* <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
-          <ChevronDownIcon className="h-4 w-4" />
-        </div> */}
       </div>
     </div>
   );
