@@ -1,6 +1,6 @@
 // src/pages/DocumentsPage.tsx
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 // import { useSearchParams } from 'react-router-dom'; // Для работы с параметрами URL (поиска, сортировки)
 // import { useQuery } from '@tanstack/react-query'; // Для управления состоянием загрузки/ошибок/кэширования
 // import { fetchDocuments } from '../services/documentService'; // Будет создан позже
@@ -19,7 +19,6 @@ const DocumentsPage: React.FC = () => {
   // === Состояния загрузки и ошибок (заглушки) ===
   // const { data, error, isLoading, isFetching, refetch } = useQuery<...>({...});
   const isLoading = false; // Заглушка
-  const isFetching = false; // Заглушка
   const error = null; // Заглушка
   // const documents: Document[] = data?.documents || []; // Заглушка
   // const totalDocuments = data?.total || 0; // Заглушка
