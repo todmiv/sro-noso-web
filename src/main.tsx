@@ -4,7 +4,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter as Router } from 'react-router-dom'; // Для навигации
 import App from './App.tsx';
-import './styles/index.css'; // Импорт основных стилей (включая Tailwind)
+import './index.css'; // Импорт основных стилей (включая Tailwind)
 
 // === Инициализация глобальных сервисов ===
 
